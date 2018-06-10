@@ -429,13 +429,27 @@
 	<data name="text_error_title_required">
 		<value>'Başlık' zorunlu bir sahadır ve boş geçilemez.</value>
 	</data>
-	<data name="text_error_contact_email_required"></data>
-	<data name="text_error_invalid_email"></data>
-	<data name="text_error_root_required"></data>
-	<data name="text_error_invalid_url"></data>
-	<data name="text_error_copyright_owner_required"></data>
-	<data name="text_error_max_days_required"></data>
-	<data name="text_error_max_days_range"></data>
+	<data name="text_error_contact_email_required" xml:space="preserve">
+		<value>Contact email required</value>
+	</data>
+	<data name="text_error_invalid_email" xml:space="preserve">
+		<value>Email invalid</value>
+	</data>
+	<data name="text_error_root_required" xml:space="preserve">
+		<value>Root required</value>
+	</data>
+	<data name="text_error_invalid_url" xml:space="preserve">
+		<value>URL invalid</value>
+	</data>
+	<data name="text_error_copyright_owner_required" xml:space="preserve">
+		<value>Copyright owner required</value>
+	</data>
+	<data name="text_error_max_days_required" xml:space="preserve">
+		<value>Max days required</value>
+	</data>
+	<data name="text_error_max_days_range" xml:space="preserve">
+		<value>Max days out of range</value>
+	</data>
 	<data name="text_referrers_title">
 		<value>Referrers</value>
 	</data>
@@ -505,9 +519,6 @@
 	<data name="text_sites_not_saved">
 		<value>Site değişklikleri kaydedilmedi. Bunun için "Değişiklikleri Kaydet" butonunu kullanın.</value>
 	</data>
-	<data name="text_crosspost">
-		<value>Crosspost</value>
-	</data>
 	<data name="text_profile_name">
 		<value>Profil İsmi</value>
 	</data>
@@ -528,9 +539,6 @@
 	</data>
 	<data name="text_apitype">
 		<value>API Tipi</value>
-	</data>
-	<data name="text_admin_crosspost">
-		<value>Crosspost Referrals</value>
 	</data>
 	<data name="text_crosspost_referrer_title">
 		<value>Crosspost Referrers</value>
