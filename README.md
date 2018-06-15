@@ -1,4 +1,5 @@
 
+
 # Dasblog
 The [DasBlog Blogging Engine](https://msdn.microsoft.com/en-us/library/aa480016.aspx) reintroduced with ASP.NET Core
 
@@ -27,10 +28,10 @@ You can find more specific installation steps for Windows development [here](htt
 
 In order to build the DasBlog Core, ensure that you have [Git](https://git-scm.com/downloads) installed.
 
-Clone or fork a copy of the repo:
+Fork the repo:
 
 ```bash
-git clone https://github.com/poppastring/dasblog-core
+git clone https://github.com/[YOUR_GITHUB_ID]/dasblog-core
 ```
 
 Change to the "source" directory and open the *DasBlog All.sln* and perform a build.
@@ -46,3 +47,5 @@ Change to the "source" directory and open the *DasBlog All.sln* and perform a bu
 - Support for Sitemap
 - Support for paging e.g. page/1, page/2, etc.
 - Add/Edit/Delete blog posts
+- Add Comments
+- Support for Live Writer
