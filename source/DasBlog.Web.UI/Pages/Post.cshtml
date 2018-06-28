@@ -1,0 +1,8 @@
+﻿@page "{PostTitle?}"
+@model PostModel
+@{
+    ViewData["Title"] = "Post";
+}
+
+<partial name="_SinglePost" model="Model.Post" />
+<partial name="_CommentsPartial" model="Model.Post.Comments" />

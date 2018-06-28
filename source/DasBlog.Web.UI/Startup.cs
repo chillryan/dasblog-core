@@ -1,27 +1,27 @@
 ﻿using System;
 using System.Security.Principal;
+using AutoMapper;
+using DasBlog.Core;
 using DasBlog.Core.Configuration;
 using DasBlog.Managers;
 using DasBlog.Managers.Interfaces;
 using DasBlog.Web.Identity;
+using DasBlog.Web.Mappers;
 using DasBlog.Web.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Rewrite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using AutoMapper;
-using DasBlog.Web.Mappers;
-using DasBlog.Core;
 
 namespace DasBlog.Web
 {
 	public class Startup
 	{
 		public const string SITESECURITYCONFIG = @"Config\siteSecurity.config";
+		private const string IISURLREWRITE = @"Config\IISUrlRewrite.xml";
 		private IHostingEnvironment _hostingEnvironment;
 
 		public Startup(IConfiguration configuration, IHostingEnvironment env)
@@ -41,6 +41,42 @@ namespace DasBlog.Web
 		}
 
 		public IConfiguration Configuration { get; }
+
+		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+		public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+		{
+			if (env.IsDevelopment())
+			{
+				app.UseDeveloperExceptionPage();
+			}
+			else
+			{
+				app.UseExceptionHandler("/Error");
+			}
+
+			app.UseStaticFiles();
+			app.UseAuthentication();
+			app.UseMvc();
+			//app.UseMvc(routes =>
+			//{
+			//	routes.MapRoute(
+			//		"Original Post Format",
+			//		"{posttitle}.aspx",
+			//		new { controller = "BlogPost", action = "Post", posttitle = "" });
+
+			//	routes.MapRoute(
+			//		"New Post Format",
+			//		"{posttitle}",
+			//		new { controller = "BlogPost", action = "Post", postitle = "" });
+
+			//	routes.MapRoute(
+			//		name: "default",
+			//		template: "{controller=Home}/{action=Index}/{id?}");
+			//});
+
+
+			app.UseRewriter(new RewriteOptions().AddIISUrlRewrite(env.ContentRootFileProvider, IISURLREWRITE));
+		}
 
 		// This method gets called by the runtime. Use this method to add services to the container.
 		public void ConfigureServices(IServiceCollection services)
@@ -89,10 +125,10 @@ namespace DasBlog.Web
 				};
 			});
 
-			services.Configure<RazorViewEngineOptions>(rveo =>
-			{
-				rveo.ViewLocationExpanders.Add(new DasBlogLocationExpander(Configuration.GetSection("DasBlogSettings")["Theme"]));
-			});
+			//services.Configure<RazorViewEngineOptions>(options =>
+			//{
+			//	options.ViewLocationExpanders.Add(new DasBlogLocationExpander(Configuration.GetSection("DasBlogSettings")["Theme"]));
+			//});
 
 			services
 				.AddTransient<IDasBlogSettings, DasBlogSettings>()
@@ -116,49 +152,14 @@ namespace DasBlog.Web
 				{
 					mapperConfig.AddProfile(new ProfilePost(services.BuildServiceProvider().GetService<IDasBlogSettings>()));
 					mapperConfig.AddProfile(typeof(ProfileDasBlogUser));
+				});
+
+			services.AddMvc()
+				.AddRazorPagesOptions(options =>
+				{
+					options.Conventions.AddPageRoute("/Blog", "/");
 				})
-				.AddMvc()
 				.AddXmlSerializerFormatters();
-
-		}
-
-		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-		public void Configure(IApplicationBuilder app, IHostingEnvironment env)
-		{
-			if (env.IsDevelopment())
-			{
-				app.UseDeveloperExceptionPage();
-				app.UseBrowserLink();
-			}
-			else
-			{
-				app.UseExceptionHandler("/home/error");
-			}
-
-			app.UseStaticFiles();
-			app.UseAuthentication();
-
-			app.UseMvc(routes =>
-			{
-				routes.MapRoute(
-					"Original Post Format",
-					"{posttitle}.aspx",
-					new { controller = "BlogPost", action = "Post", posttitle = "" });
-
-				routes.MapRoute(
-					"New Post Format",
-					"{posttitle}",
-					new { controller = "BlogPost", action = "Post", postitle = ""  });
-
-				routes.MapRoute(
-					name: "default",
-					template: "{controller=Home}/{action=Index}/{id?}");
-			});
-
-			RewriteOptions options = new RewriteOptions()
-				 .AddIISUrlRewrite(env.ContentRootFileProvider, @"Config\IISUrlRewrite.xml");
-
-			app.UseRewriter(options);
 		}
 	}
 }

@@ -1,0 +1,17 @@
+﻿@page
+@model BlogModel
+@{
+    ViewData["Title"] = "Index";
+}
+@if (Model.Posts.Count() == 0)
+{
+    <p>No posts found</p>
+}
+else
+{
+    foreach (var post in Model.Posts)
+    {
+        <partial name="_SinglePost" model="post" />
+        <hr />
+    }
+}
