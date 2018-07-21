@@ -15,13 +15,13 @@ namespace DasBlog.Web.Settings
 	{
 		private readonly IFileProvider fileProvider;
 
-		public DasBlogSettings(IHostingEnvironment env, IOptions<SiteConfig> siteConfig, IOptions<MetaTags> metaTagsConfig, IOptions<SiteSecurityConfig> siteSecurityConfig, IFileProvider fileProvider)
+		public DasBlogSettings(IHostingEnvironment env, IOptions<SiteConfig> siteConfig, IOptions<MetaTags> metaTagsConfig, ISiteSecurityConfig siteSecurityConfig, IFileProvider fileProvider)
 		{
 			this.fileProvider = fileProvider;
 
 			WebRootDirectory = env.ContentRootPath;
 			SiteConfiguration = siteConfig.Value;
-			SecurityConfiguration = siteSecurityConfig.Value;
+			SecurityConfiguration = siteSecurityConfig;
 			MetaTags = metaTagsConfig.Value;
 
 			RssUrl = RelativeToRoot("feed/rss");
@@ -59,7 +59,7 @@ namespace DasBlog.Web.Settings
 
 		public string RelativeToRoot(string relative)
 		{
-			return new Uri(new Uri(SiteConfiguration.Root), relative).AbsoluteUri;
+			return new Uri(new Uri(SiteConfiguration.Root), relative).LocalPath;
 		}
 
         public string GetPermaLinkUrl(string entryId)

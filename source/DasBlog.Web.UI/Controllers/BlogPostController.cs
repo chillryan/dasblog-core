@@ -1,15 +1,21 @@
-﻿using AutoMapper;
-using DasBlog.Web.Models.BlogViewModels;
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading.Tasks;
+using AutoMapper;
+using DasBlog.Core;
 using DasBlog.Managers.Interfaces;
+using DasBlog.Web.Common;
+using DasBlog.Web.Models.BlogViewModels;
+using DasBlog.Web.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using newtelligence.DasBlog.Runtime;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using DasBlog.Web.Settings;
-using DasBlog.Core;
+using static DasBlog.Web.Common.Utils;
 
 namespace DasBlog.Web.Controllers
 {
@@ -17,17 +23,22 @@ namespace DasBlog.Web.Controllers
 	public class BlogPostController : DasBlogBaseController
 	{
 		private IBlogManager _blogManager;
+		private readonly ICategoryManager _categoryManager;
 		private IHttpContextAccessor _httpContextAccessor;
 		private readonly IDasBlogSettings _dasBlogSettings;
 		private readonly IMapper _mapper;
+		private readonly IFileSystemBinaryManager _binaryManager;
 
-		public BlogPostController(IBlogManager blogManager, IHttpContextAccessor httpContextAccessor, 
-									IDasBlogSettings settings, IMapper mapper) : base(settings)
+		public BlogPostController(IBlogManager blogManager, IHttpContextAccessor httpContextAccessor,
+		  IDasBlogSettings settings, IMapper mapper, ICategoryManager categoryManager
+		  ,IFileSystemBinaryManager binaryManager) : base(settings)
 		{
 			_blogManager = blogManager;
+			_categoryManager = categoryManager;
 			_httpContextAccessor = httpContextAccessor;
 			_dasBlogSettings = settings;
 			_mapper = mapper;
+			_binaryManager = binaryManager;
 		}
 
 		[AllowAnonymous]
@@ -44,7 +55,7 @@ namespace DasBlog.Web.Controllers
 
 					SinglePost(lpvm.Posts.First());
 
-					return ThemedView("Page", lpvm);
+					return View("Page", lpvm);
 				}
 				else
 				{
@@ -53,7 +64,7 @@ namespace DasBlog.Web.Controllers
 			}
 			else
 			{
-				return RedirectToAction("Index", "Home");
+				return RedirectToAction("index", "home");
 			}
 		}
 
@@ -68,9 +79,10 @@ namespace DasBlog.Web.Controllers
 				if (entry != null)
 				{
 					pvm = _mapper.Map<PostViewModel>(entry);
-					List <CategoryViewModel> allcategories = _mapper.Map<List<CategoryViewModel>>(_blogManager.GetCategories());
+					pvm.Languages = GetAlllanguages();
+					List<CategoryViewModel> allcategories = _mapper.Map<List<CategoryViewModel>>(_blogManager.GetCategories());
 
-					foreach(var cat in allcategories)
+					foreach (var cat in allcategories)
 					{
 						if (pvm.Categories.Count(x => x.Category == cat.Category) > 0)
 						{
@@ -86,19 +98,35 @@ namespace DasBlog.Web.Controllers
 
 			return NotFound();
 		}
-		
+
 		[HttpPost("post/edit")]
-		public IActionResult EditPost(PostViewModel post)
+		public IActionResult EditPost(PostViewModel post, string submit)
 		{
+			// languages does not get posted as part of form
+			post.Languages = GetAlllanguages();
+			if (submit == Constants.BlogPostAddCategoryAction)
+			{
+				return HandleNewCategory(post);
+			}
+			if (submit == Constants.UploadImageAction)
+			{
+				return HandleImageUpload(post);
+			}
 			if (!ModelState.IsValid)
 			{
 				return View(post);
 			}
 
+			if (!string.IsNullOrWhiteSpace(post.NewCategory))
+			{
+				ModelState.AddModelError(nameof(post.NewCategory)
+				  , $"Please click 'Add' to add the category, \"{post.NewCategory}\" or clear the text before continuing");
+				return View(post);
+			}
 			try
 			{
 				Entry entry = _mapper.Map<Entry>(post);
-				
+
 				entry.Author = _httpContextAccessor.HttpContext.User.Identity.Name;
 				entry.Language = "en-us"; //TODO: We inject this fron http context?
 				entry.Latitude = null;
@@ -111,7 +139,7 @@ namespace DasBlog.Web.Controllers
 					return View(post);
 				}
 			}
-			catch(Exception e)
+			catch (Exception e)
 			{
 				RedirectToAction("Error");
 			}
@@ -125,15 +153,32 @@ namespace DasBlog.Web.Controllers
 			PostViewModel post = new PostViewModel();
 			post.CreatedDateTime = DateTime.UtcNow;  //TODO: Set to the timezone configured???
 			post.AllCategories = _mapper.Map<List<CategoryViewModel>>(_blogManager.GetCategories());
+			post.Languages = GetAlllanguages();
 
 			return View(post);
 		}
 
 		[HttpPost("post/create")]
-		public IActionResult CreatePost(PostViewModel post)
+		public IActionResult CreatePost(PostViewModel post, string submit)
 		{
+			post.Languages = GetAlllanguages();
+			if (submit == Constants.BlogPostAddCategoryAction)
+			{
+				return HandleNewCategory(post);
+			}
+
+			if (submit == Constants.UploadImageAction)
+			{
+				return HandleImageUpload(post);
+			}
 			if (!ModelState.IsValid)
 			{
+				return View(post);
+			}
+			if (!string.IsNullOrWhiteSpace(post.NewCategory))
+			{
+				ModelState.AddModelError(nameof(post.NewCategory)
+					, $"Please click 'Add' to add the category, \"{post.NewCategory}\" or clear the text before continuing");
 				return View(post);
 			}
 
@@ -143,12 +188,12 @@ namespace DasBlog.Web.Controllers
 
 				entry.Initialize();
 				entry.Author = _httpContextAccessor.HttpContext.User.Identity.Name;
-				entry.Language = "en-us"; //TODO: We inject this fron http context?
+				entry.Language = post.Language;
 				entry.Latitude = null;
 				entry.Longitude = null;
 
 				EntrySaveState sts = _blogManager.CreateEntry(entry);
-				if(sts != EntrySaveState.Added)
+				if (sts != EntrySaveState.Added)
 				{
 					ModelState.AddModelError("", "Failed to create blog post");
 					return View(post);
@@ -159,7 +204,7 @@ namespace DasBlog.Web.Controllers
 				RedirectToAction("Error");
 			}
 
-			return View("Views/BlogPost/EditPost.cshtml", post);
+			return View("views/blogpost/editPost.cshtml", post);
 		}
 
 		[HttpGet("post/{postid:guid}/delete")]
@@ -169,7 +214,7 @@ namespace DasBlog.Web.Controllers
 			{
 				_blogManager.DeleteEntry(postid.ToString());
 			}
-			catch(Exception ex)
+			catch (Exception ex)
 			{
 				RedirectToAction("Error");
 			}
@@ -199,14 +244,14 @@ namespace DasBlog.Web.Controllers
 
 			SinglePost(lpvm.Posts.First());
 
-			return ThemedView("Page", lpvm);
+			return View("page", lpvm);
 		}
 
 		[AllowAnonymous]
 		[HttpPost("post/comment")]
 		public IActionResult AddComment(AddCommentViewModel addcomment)
 		{
-			if(!_dasBlogSettings.SiteConfiguration.EnableComments)
+			if (!_dasBlogSettings.SiteConfiguration.EnableComments)
 			{
 				return BadRequest();
 			}
@@ -274,6 +319,144 @@ namespace DasBlog.Web.Controllers
 			}
 
 			return Ok();
+		}
+
+		[AllowAnonymous]
+		[HttpGet("post/category/{category}")]
+		public IActionResult GetCategory(string category)
+		{
+			if (string.IsNullOrEmpty(category))
+			{
+				return RedirectToAction("Index", "Home");
+			}
+
+			ListPostsViewModel lpvm = new ListPostsViewModel();
+			lpvm.Posts = _categoryManager.GetEntries(category, _httpContextAccessor.HttpContext.Request.Headers["Accept-Language"])
+								.Select(entry => _mapper.Map<PostViewModel>(entry)).ToList();
+
+			DefaultPage();
+
+			return View("Page", lpvm);
+		}
+		private IActionResult HandleNewCategory(PostViewModel post)
+		{
+			ModelState.ClearValidationState("");
+			if (string.IsNullOrWhiteSpace(post.NewCategory))
+			{
+				ModelState.AddModelError(nameof(post.NewCategory)
+				  ,"To add a category " +
+				   "you must enter some text in the box next to the 'Add' button before clicking 'Add'");
+				return View(post);
+			}
+
+			var newCategory = post.NewCategory?.Trim();
+			var newCategoryDisplayName = newCategory;
+			var newCategoryUrl = EncodeCategoryUrl(newCategory, _dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement );
+			if (post.AllCategories.Any(c => c.CategoryUrl == newCategoryUrl))
+			{
+				ModelState.AddModelError(nameof(post.NewCategory), $"The category, {post.NewCategory}, already exists");
+			}
+			else
+			{
+				post.AllCategories.Add(
+				  new CategoryViewModel {
+				  Category = newCategoryDisplayName
+				  , CategoryUrl = newCategoryUrl, Checked = true});
+				post.NewCategory = "";
+				ModelState.Remove(nameof(post.NewCategory));	// ensure response refreshes page with view model's value
+			}
+
+			return View(post);
+		}
+		
+		private IActionResult HandleImageUpload(PostViewModel post)
+		{
+			ModelState.ClearValidationState("");
+			String fileName = post.Image?.FileName;
+			if (string.IsNullOrEmpty(fileName))
+			{
+				ModelState.AddModelError(nameof(post.Image)
+					,$"You must select a file before clicking \"{Constants.UploadImageAction}\" to upload it");
+				return View(post);
+			}
+			string relativePath = null;
+			try
+			{
+				using (var s = post.Image.OpenReadStream())
+				{
+					relativePath = _binaryManager.SaveFile(s, fileName);
+				}
+			}
+			catch (Exception e)
+			{
+				ModelState.AddModelError(nameof(post.Image), $"An error occurred while uploading image ({e.Message})");
+				return View(post);
+			}
+
+			if (string.IsNullOrEmpty(relativePath))
+			{
+				ModelState.AddModelError(nameof(post.Image)
+				  ,"Failed to upload file - reason unknown");
+				return View(post);
+			}
+			string linkText = String.Format("<p><img border=\"0\" src=\"{0}\"></p>",
+				relativePath);
+			post.Content += linkText;
+			ModelState.Remove(nameof(post.Content));	// ensure that model change is included in response
+			return View(post);
+		}
+		private IEnumerable<SelectListItem> GetAlllanguages()
+		{
+			CultureInfo[] cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
+
+			// setup temp store for listitem items, for sorting
+			List<SelectListItem> cultureList = new List<SelectListItem>(cultures.Length);
+
+			foreach (CultureInfo ci in cultures)
+			{
+				string langName = (ci.NativeName != ci.EnglishName) ? ci.NativeName + " / " + ci.EnglishName : ci.NativeName;
+
+				if (langName.Length > 55)
+				{
+					langName = langName.Substring(0, 55) + "...";
+				}
+
+				if (string.IsNullOrEmpty(ci.Name))
+				{
+					langName = string.Empty;		// invariant language (invariant country)
+				}
+
+				cultureList.Add(new SelectListItem{ Value = ci.Name, Text = langName});
+			}
+
+			// setup the sort culture
+			//string rssCulture = requestPage.SiteConfig.RssLanguage;
+
+			CultureInfo sortCulture;
+
+
+			try
+			{
+//				sortCulture = (rssCulture != null && rssCulture.Length > 0 ? new CultureInfo(rssCulture) : CultureInfo.CurrentCulture);
+				sortCulture = CultureInfo.CurrentCulture;
+			}
+			catch (ArgumentException)
+			{
+				// default to the culture of the server
+				sortCulture = CultureInfo.CurrentCulture;
+			}
+
+			// sort the list
+			cultureList.Sort(delegate(SelectListItem x, SelectListItem y)
+			{
+				// actual comparison
+				return String.Compare(x.Text, y.Text, true, sortCulture);
+			});
+			// add to the languages listbox
+
+			SelectListItem[] cultureListItems = cultureList.ToArray();
+
+			return cultureListItems;
 		}
 	}
 }
