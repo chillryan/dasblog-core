@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using AutoMapper;
 using DasBlog.Core;
 using DasBlog.Web.Models.BlogViewModels;
 using newtelligence.DasBlog.Runtime;
-using static DasBlog.Web.Common.Utils;
+using static DasBlog.Core.Common.Utils;
 
 namespace DasBlog.Web.Mappers
 {

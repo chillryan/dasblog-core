@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Security.Principal;
 using System.Threading;
@@ -20,11 +19,11 @@ using Microsoft.Extensions.DependencyInjection;
 using AutoMapper;
 using DasBlog.Web.Mappers;
 using DasBlog.Core;
+using DasBlog.Core.Common;
 using DasBlog.Core.Services;
 using DasBlog.Core.Services.Interfaces;
 using Microsoft.Extensions.FileProviders;
-using DasBlog.Core.Services;
-using DasBlog.Core.Services.Interfaces;
+using DasBlog.Web.TagHelpers.RichEdit;
 
 namespace DasBlog.Web
 {
@@ -36,18 +35,7 @@ namespace DasBlog.Web
 
 		public Startup(IConfiguration configuration, IHostingEnvironment env)
 		{
-			var builder = new ConfigurationBuilder()
-			.SetBasePath(env.ContentRootPath)
-			.AddXmlFile(@"Config\site.config", optional: true, reloadOnChange: true)
-			.AddXmlFile(@"Config\metaConfig.xml", optional: true, reloadOnChange: true)
-			//.AddXmlFile(SITESECURITYCONFIG, optional: true, reloadOnChange: true)
-			.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-			.AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
-			.AddEnvironmentVariables()
-			;
-			
-			Configuration = builder.Build();
-
+			Configuration = configuration;
 			_hostingEnvironment = env;
 			_binariesPath = Configuration.GetValue<string>("binariesDir", "/").TrimStart('~').TrimEnd('/');
 		}
@@ -62,9 +50,11 @@ namespace DasBlog.Web
 
 			services.Configure<SiteConfig>(Configuration);
 			services.Configure<MetaTags>(Configuration);
-//			services.Configure<SiteSecurityConfig>(Configuration);
 			services.Configure<LocalUserDataOptions>(options
 			  => options.Path = Path.Combine(_hostingEnvironment.ContentRootPath, SITESECURITYCONFIG));
+			services.Configure<ActivityRepoOptions>(options
+			  => options.Path = Path.Combine(_hostingEnvironment.ContentRootPath, Constants.LogDirectory));
+
 			// Add identity types
 			services
 				.AddIdentity<DasBlogUser, DasBlogRole>()
@@ -120,6 +110,7 @@ namespace DasBlog.Web
 				.AddTransient<IPrincipal>(provider => provider.GetService<IHttpContextAccessor>().HttpContext.User)
 				.AddTransient<ISiteRepairer, SiteRepairer>()
 				;
+			services.AddScoped<IRichEditBuilder>(SelectRichEditor);
 
 			services
 				.AddSingleton(_hostingEnvironment.ContentRootFileProvider)
@@ -135,6 +126,9 @@ namespace DasBlog.Web
 				.AddSingleton<IUserDataRepo, UserDataRepo>()
 				.AddSingleton<ISiteSecurityConfig, SiteSecurityConfig>()
 				.AddSingleton<IUserService, UserService>()
+				.AddSingleton<IActivityService, ActivityService>()
+				.AddSingleton<IActivityRepoFactory, ActivityRepoFactory>()
+				.AddSingleton<IEventLineParser, EventLineParser>()
 				;
 			services
 				.AddAutoMapper(mapperConfig =>
@@ -158,7 +152,7 @@ namespace DasBlog.Web
 			}
 			else
 			{
-//				app.UseExceptionHandler("/home/error");
+				app.UseExceptionHandler("/home/error");
 			}
 
 			if (!siteOk)
@@ -214,8 +208,7 @@ namespace DasBlog.Web
 			{
 				existingThreadPrincipal = Thread.CurrentPrincipal;
 				Thread.CurrentPrincipal = context.User;
-				var rtn = next();
-				return rtn;
+				return next();
 			}
 			finally
 			{
@@ -226,6 +219,36 @@ namespace DasBlog.Web
 		{
 			var sr = app.ApplicationServices.GetService<ISiteRepairer>();
 			return sr.RepairSite();
+		}
+		/// <summary>
+		/// The intention here is to allow the rich edit control to be changed from request to request.
+		/// Before this flexibility is active a "settings" page will be required to make changes to
+		/// DasBlogSettings
+		/// </summary>
+		/// <param name="serviceProvider"></param>
+		/// <returns>object used by the taghandlers supporting the rich edit control</returns>
+		/// <exception cref="Exception">EntryEditControl in site.config is misconfugured</exception>
+		private IRichEditBuilder SelectRichEditor(IServiceProvider serviceProvider)
+		{
+			string entryEditControl = serviceProvider.GetService<IDasBlogSettings>()
+			  .SiteConfiguration.EntryEditControl.ToLower();
+			IRichEditBuilder richEditBuilder;
+			switch (entryEditControl)
+			{
+				case Constants.TinyMceEditor:
+					richEditBuilder = new TinyMceBuilder();
+					break;
+				case Constants.NicEditEditor:
+					richEditBuilder = new NicEditBuilder();
+					break;
+				case Constants.TextAreaEditor:
+					richEditBuilder = new TextAreaBuilder();
+					break;
+				default:
+					throw new Exception($"Attempt to use unknown rich edit control, {entryEditControl}");
+			}
+
+			return richEditBuilder;
 		}
 	}
 }

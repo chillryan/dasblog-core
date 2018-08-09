@@ -1,5 +1,5 @@
 ﻿@using System.Reflection.Metadata.Ecma335
-@using DasBlog.Web.Common
+@using DasBlog.Core.Common
 @model System.Collections.Generic.IEnumerable<DasBlog.Core.Security.User>
 
 @functions
@@ -51,7 +51,7 @@
             @foreach (var item in Model) {
                 <tr>
                     <td>
-                        <user-id email-address="/users/@item.EmailAddress" linkability="@ViewBag.Linkability"> @ElideTitle(item.EmailAddress)</user-id>
+                        <user-link email-address="/users/@item.EmailAddress" linkability="@ViewBag.Linkability"> @ElideTitle(item.EmailAddress)</user-link>
                     </td>
                 </tr>
             }

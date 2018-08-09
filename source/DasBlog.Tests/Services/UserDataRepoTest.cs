@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using DasBlog.Core.Security;
 using Xunit;
 using DasBlog.Core.Services;
@@ -12,10 +11,10 @@ namespace DasBlog.Tests.Services
 	public class UserDataRepoTest
 	{
 		[Fact]
-		public void ShouldLoadUsers()
+		public void Load_OnStandardConfig_ReturnsContainedUser()
 		{
 			IUserDataRepo repo = new UserDataRepo(
-			  new Options<LocalUserDataOptions>{ Value = 
+			  new OptionsAccessor<LocalUserDataOptions>{ Value = 
 			  new LocalUserDataOptions{Path = "..\\..\\..\\config\\SiteSecurity.config"}});
 			List<User> users = repo.LoadUsers().ToList();
 
@@ -23,7 +22,7 @@ namespace DasBlog.Tests.Services
 		}
 	}
 
-	public class Options<T> : IOptions<T> where T : class, new()
+	public class OptionsAccessor<T> : IOptions<T> where T : class, new()
 	{
 		public T Value { get; set; }
 	}
