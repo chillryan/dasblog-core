@@ -112,10 +112,10 @@
     <value>2.0</value>
   </resheader>
   <resheader name="reader">
-    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <resheader name="writer">
-    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="text_person_name" xml:space="preserve">
     <value>名前</value>
@@ -487,25 +487,25 @@
     <value>タイトルは必ず何かを入力して下さい。</value>
   </data>
   <data name="text_error_contact_email_required" xml:space="preserve">
-    <value />
+    <value>Contact email required</value>
   </data>
   <data name="text_error_invalid_email" xml:space="preserve">
-    <value />
+    <value>Email invalid</value>
   </data>
   <data name="text_error_root_required" xml:space="preserve">
-    <value />
+    <value>Root required</value>
   </data>
   <data name="text_error_invalid_url" xml:space="preserve">
-    <value />
+    <value>URL invalid</value>
   </data>
   <data name="text_error_copyright_owner_required" xml:space="preserve">
-    <value />
+    <value>Copyright owner required</value>
   </data>
   <data name="text_error_max_days_required" xml:space="preserve">
-    <value />
+    <value>Max days required</value>
   </data>
   <data name="text_error_max_days_range" xml:space="preserve">
-    <value />
+    <value>Max days out of ranges</value>
   </data>
   <data name="text_referrers_title" xml:space="preserve">
     <value>参照</value>
@@ -902,9 +902,6 @@
   </data>
   <data name="text_days_expire_field" xml:space="preserve">
     <value>コメントを自動的に無効にする</value>
-  </data>
-  <data name="text_error_contact_email_required1" xml:space="preserve">
-    <value />
   </data>
   <data name="text_error_content_lookeahead_days_range" xml:space="preserve">
     <value>0以上の数字を入力してください</value>

@@ -403,26 +403,26 @@
 		<value>'Rubrik' är ett obligatoriskt fält och kan inte vara tomt.</value>
 	</data>
 	<data name="text_error_contact_email_required" xml:space="preserve">
-    <value></value>
-  </data>
+		<value>Contact email required</value>
+	</data>
 	<data name="text_error_invalid_email" xml:space="preserve">
-    <value></value>
-  </data>
+		<value>Email invalid</value>
+	</data>
 	<data name="text_error_root_required" xml:space="preserve">
-    <value></value>
-  </data>
+		<value>Root required</value>
+	</data>
 	<data name="text_error_invalid_url" xml:space="preserve">
-    <value></value>
-  </data>
+		<value>URL invalid</value>
+	</data>
 	<data name="text_error_copyright_owner_required" xml:space="preserve">
-    <value></value>
-  </data>
+		<value>Copyright owner required</value>
+	</data>
 	<data name="text_error_max_days_required" xml:space="preserve">
-    <value></value>
-  </data>
+		<value>Max days required</value>
+	</data>
 	<data name="text_error_max_days_range" xml:space="preserve">
-    <value></value>
-  </data>
+		<value>Max days out of range</value>
+	</data>
 	<data name="text_referrers_title">
 		<value>Besökare</value>
 	</data>
@@ -967,9 +967,9 @@
 		<value>OpenId inställningar</value>
 	</data>
 	<data name="text_displayname" xml:space="preserve">
-    <value>Namn som visas</value>
-  </data>
+		<value>Namn som visas</value>
+	</data>
 	<data name="text_OpenIdIdentifier" xml:space="preserve">
-    <value>OpenID identifierare</value>
-  </data>
+		<value>OpenID identifierare</value>
+	</data>
 </root>

@@ -22,7 +22,7 @@ namespace DasBlog.Web.Pages
 
 		public void OnGet()
 		{
-			var frontPagePosts = from p in blogManager.GetFrontPagePosts()
+			var frontPagePosts = from p in blogManager.GetFrontPagePosts(Request.Headers["Accept-Language"])
 								 select mapper.Map<PostViewModel>(p);
 
 			Posts = frontPagePosts;

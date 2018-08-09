@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Xml.Serialization;
 
 namespace DasBlog.Core.Security
@@ -10,7 +8,9 @@ namespace DasBlog.Core.Security
 	public class User : IEquatable<User>
 	{
 		[XmlElement("Name")]
-		public string Name { get; set; }
+		public string Name
+		{
+			get { return EmailAddress;} }
 
 		[XmlElement("Role")]
 		public Role Role { get; set; }

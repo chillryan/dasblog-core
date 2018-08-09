@@ -1,20 +1,29 @@
 ﻿using System;
+using System.IO;
 using System.Security.Principal;
+using System.Threading;
+using System.Threading.Tasks;
 using AutoMapper;
 using DasBlog.Core;
+using DasBlog.Core.Common;
 using DasBlog.Core.Configuration;
+using DasBlog.Core.Services;
+using DasBlog.Core.Services.Interfaces;
 using DasBlog.Managers;
 using DasBlog.Managers.Interfaces;
 using DasBlog.Web.Identity;
 using DasBlog.Web.Mappers;
 using DasBlog.Web.Settings;
+using DasBlog.Web.TagHelpers.RichEdit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Rewrite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 
 namespace DasBlog.Web
 {
@@ -23,60 +32,52 @@ namespace DasBlog.Web
 		public const string SITESECURITYCONFIG = @"Config\siteSecurity.config";
 		private const string IISURLREWRITE = @"Config\IISUrlRewrite.xml";
 		private IHostingEnvironment _hostingEnvironment;
+		private string _binariesPath;
 
 		public Startup(IConfiguration configuration, IHostingEnvironment env)
 		{
-			var builder = new ConfigurationBuilder()
-			.SetBasePath(env.ContentRootPath)
-			.AddXmlFile(@"Config\site.config", optional: true, reloadOnChange: true)
-			.AddXmlFile(@"Config\metaConfig.xml", optional: true, reloadOnChange: true)
-			.AddXmlFile(SITESECURITYCONFIG, optional: true, reloadOnChange: true)
-			.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-			.AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
-			.AddEnvironmentVariables();
-
-			Configuration = builder.Build();
-
+			Configuration = configuration;
 			_hostingEnvironment = env;
+			_binariesPath = Configuration.GetValue<string>("binariesDir", "/").TrimStart('~').TrimEnd('/');
 		}
 
 		public IConfiguration Configuration { get; }
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-		public void Configure(IApplicationBuilder app, IHostingEnvironment env)
-		{
-			if (env.IsDevelopment())
-			{
-				app.UseDeveloperExceptionPage();
-			}
-			else
-			{
-				app.UseExceptionHandler("/Error");
-			}
+		//public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+		//{
+		//	if (env.IsDevelopment())
+		//	{
+		//		app.UseDeveloperExceptionPage();
+		//	}
+		//	else
+		//	{
+		//		app.UseExceptionHandler("/Error");
+		//	}
 
-			app.UseStaticFiles();
-			app.UseAuthentication();
-			app.UseMvc();
-			//app.UseMvc(routes =>
-			//{
-			//	routes.MapRoute(
-			//		"Original Post Format",
-			//		"{posttitle}.aspx",
-			//		new { controller = "BlogPost", action = "Post", posttitle = "" });
+		//	app.UseStaticFiles();
+		//	app.UseAuthentication();
+		//	app.UseMvc();
+		//	//app.UseMvc(routes =>
+		//	//{
+		//	//	routes.MapRoute(
+		//	//		"Original Post Format",
+		//	//		"{posttitle}.aspx",
+		//	//		new { controller = "BlogPost", action = "Post", posttitle = "" });
 
-			//	routes.MapRoute(
-			//		"New Post Format",
-			//		"{posttitle}",
-			//		new { controller = "BlogPost", action = "Post", postitle = "" });
+		//	//	routes.MapRoute(
+		//	//		"New Post Format",
+		//	//		"{posttitle}",
+		//	//		new { controller = "BlogPost", action = "Post", postitle = "" });
 
-			//	routes.MapRoute(
-			//		name: "default",
-			//		template: "{controller=Home}/{action=Index}/{id?}");
-			//});
+		//	//	routes.MapRoute(
+		//	//		name: "default",
+		//	//		template: "{controller=Home}/{action=Index}/{id?}");
+		//	//});
 
 
-			app.UseRewriter(new RewriteOptions().AddIISUrlRewrite(env.ContentRootFileProvider, IISURLREWRITE));
-		}
+		//	app.UseRewriter(new RewriteOptions().AddIISUrlRewrite(env.ContentRootFileProvider, IISURLREWRITE));
+		//}
 
 		// This method gets called by the runtime. Use this method to add services to the container.
 		public void ConfigureServices(IServiceCollection services)
@@ -86,7 +87,10 @@ namespace DasBlog.Web
 
 			services.Configure<SiteConfig>(Configuration);
 			services.Configure<MetaTags>(Configuration);
-			services.Configure<SiteSecurityConfig>(Configuration);
+			services.Configure<LocalUserDataOptions>(options
+			  => options.Path = Path.Combine(_hostingEnvironment.ContentRootPath, SITESECURITYCONFIG));
+			services.Configure<ActivityRepoOptions>(options
+			  => options.Path = Path.Combine(_hostingEnvironment.ContentRootPath, Constants.LogDirectory));
 
 			// Add identity types
 			services
@@ -118,6 +122,7 @@ namespace DasBlog.Web
 				options.LogoutPath = "/account/logout"; // If the LogoutPath is not set here, ASP.NET Core will default to /Account/Logout
 				options.AccessDeniedPath = "/account/accessDenied"; // If the AccessDeniedPath is not set here, ASP.NET Core will default to /Account/AccessDenied
 				options.SlidingExpiration = true;
+				options.Cookie.Expiration = TimeSpan.FromSeconds(10000);
 				options.Cookie = new CookieBuilder
 				{
 					HttpOnly = true,
@@ -125,16 +130,24 @@ namespace DasBlog.Web
 				};
 			});
 
-			//services.Configure<RazorViewEngineOptions>(options =>
-			//{
-			//	options.ViewLocationExpanders.Add(new DasBlogLocationExpander(Configuration.GetSection("DasBlogSettings")["Theme"]));
-			//});
+			services.Configure<RazorViewEngineOptions>(rveo =>
+			{
+				rveo.ViewLocationExpanders.Add(new DasBlogLocationExpander(Configuration.GetSection("DasBlogSettings")["Theme"]));
+			});
+			services.AddSession(options =>
+			{
+				// Set a short timeout for easy testing.
+				options.IdleTimeout = TimeSpan.FromSeconds(1000);
+			});
 
 			services
 				.AddTransient<IDasBlogSettings, DasBlogSettings>()
 				.AddTransient<IUserStore<DasBlogUser>, DasBlogUserStore>()
 				.AddTransient<IRoleStore<DasBlogRole>, DasBlogUserRoleStore>()
-				.AddTransient<IPrincipal>(provider => provider.GetService<IHttpContextAccessor>().HttpContext.User);
+				.AddTransient<IPrincipal>(provider => provider.GetService<IHttpContextAccessor>().HttpContext.User)
+				.AddTransient<ISiteRepairer, SiteRepairer>()
+				;
+			services.AddScoped<IRichEditBuilder>(SelectRichEditor);
 
 			services
 				.AddSingleton(_hostingEnvironment.ContentRootFileProvider)
@@ -145,13 +158,21 @@ namespace DasBlog.Web
 				.AddSingleton<ISiteSecurityManager, SiteSecurityManager>()
 				.AddSingleton<IXmlRpcManager, XmlRpcManager>()
 				.AddSingleton<ISiteManager, SiteManager>()
-				.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-
+				.AddSingleton<IHttpContextAccessor, HttpContextAccessor>()
+				.AddSingleton<IFileSystemBinaryManager, FileSystemBinaryManager>()
+				.AddSingleton<IUserDataRepo, UserDataRepo>()
+				.AddSingleton<ISiteSecurityConfig, SiteSecurityConfig>()
+				.AddSingleton<IUserService, UserService>()
+				.AddSingleton<IActivityService, ActivityService>()
+				.AddSingleton<IActivityRepoFactory, ActivityRepoFactory>()
+				.AddSingleton<IEventLineParser, EventLineParser>()
+				;
 			services
 				.AddAutoMapper(mapperConfig =>
 				{
-					mapperConfig.AddProfile(new ProfilePost(services.BuildServiceProvider().GetService<IDasBlogSettings>()));
-					mapperConfig.AddProfile(typeof(ProfileDasBlogUser));
+					var serviceProvider = services.BuildServiceProvider();
+					mapperConfig.AddProfile(new ProfilePost(serviceProvider.GetService<IDasBlogSettings>()));
+					mapperConfig.AddProfile(new ProfileDasBlogUser(serviceProvider.GetService<ISiteSecurityManager>()));
 				});
 
 			services.AddMvc()
@@ -160,6 +181,116 @@ namespace DasBlog.Web
 					options.Conventions.AddPageRoute("/Blog", "/");
 				})
 				.AddXmlSerializerFormatters();
+		}
+
+		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+		public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+		{
+			(var siteOk, string siteError) = RepairSite(app);
+			if (env.IsDevelopment())
+			{
+				app.UseDeveloperExceptionPage();
+				app.UseBrowserLink();
+			}
+			else
+			{
+				app.UseExceptionHandler("/home/error");
+			}
+
+			if (!siteOk)
+			{
+				app.Run(async context => await context.Response.WriteAsync(siteError));
+				return;
+			}
+			app.UseStaticFiles();
+			app.UseStaticFiles(new StaticFileOptions()
+			{
+				FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, _binariesPath.TrimStart('/'))),
+				RequestPath = _binariesPath
+			});
+			app.UseAuthentication();
+			app.Use(PopulateThreadCurrentPrincipalForMvc);
+			app.UseMvc(routes =>
+			{
+				routes.MapRoute(
+					"Original Post Format",
+					"{posttitle}.aspx",
+					new { controller = "BlogPost", action = "Post", posttitle = "" });
+
+				routes.MapRoute(
+					"New Post Format",
+					"{posttitle}",
+					new { controller = "BlogPost", action = "Post", postitle = "" });
+
+				routes.MapRoute(
+					name: "default",
+					template: "{controller=Home}/{action=Index}/{id?}");
+			});
+
+			RewriteOptions options = new RewriteOptions()
+				 .AddIISUrlRewrite(env.ContentRootFileProvider, @"Config\IISUrlRewrite.xml");
+
+			app.UseRewriter(options);
+		}
+		/// <summary>
+		/// BlogDataService and DayEntry rely on the thread's CurrentPrincipal and its role to determine if users
+		/// should be allowed edit and add posts.
+		/// Unfortunately the asp.net team no longer favour an approach involving the current thread so
+		/// much as I am loath to stick values on globalish type stuff going up and down the stack
+		/// this is a light touch way of including the functionality and actually looks fairly safe.
+		/// Hopefully, in the fullness of time we will beautify the legacy code and this can go.
+		/// </summary>
+		/// <param name="context">provides the user data</param>
+		/// <param name="next">standdard middleware - in this case MVC iteelf</param>
+		/// <returns></returns>
+		private Task PopulateThreadCurrentPrincipalForMvc(HttpContext context, Func<Task> next)
+		{
+			IPrincipal existingThreadPrincipal = null;
+			try
+			{
+				existingThreadPrincipal = Thread.CurrentPrincipal;
+				Thread.CurrentPrincipal = context.User;
+				return next();
+			}
+			finally
+			{
+				Thread.CurrentPrincipal = existingThreadPrincipal;
+			}
+		}
+		private static (bool result, string errorMessage) RepairSite(IApplicationBuilder app)
+		{
+			var sr = app.ApplicationServices.GetService<ISiteRepairer>();
+			return sr.RepairSite();
+		}
+		/// <summary>
+		/// The intention here is to allow the rich edit control to be changed from request to request.
+		/// Before this flexibility is active a "settings" page will be required to make changes to
+		/// DasBlogSettings
+		/// </summary>
+		/// <param name="serviceProvider"></param>
+		/// <returns>object used by the taghandlers supporting the rich edit control</returns>
+		/// <exception cref="Exception">EntryEditControl in site.config is misconfugured</exception>
+		private IRichEditBuilder SelectRichEditor(IServiceProvider serviceProvider)
+		{
+			string entryEditControl = serviceProvider.GetService<IDasBlogSettings>()
+			  .SiteConfiguration.EntryEditControl.ToLower();
+			IRichEditBuilder richEditBuilder;
+			switch (entryEditControl)
+			{
+				case Constants.TinyMceEditor:
+					richEditBuilder = new TinyMceBuilder();
+					break;
+				case Constants.NicEditEditor:
+					richEditBuilder = new NicEditBuilder();
+					break;
+				case Constants.TextAreaEditor:
+					richEditBuilder = new TextAreaBuilder();
+					break;
+				default:
+					throw new Exception($"Attempt to use unknown rich edit control, {entryEditControl}");
+			}
+
+			return richEditBuilder;
 		}
 	}
 }

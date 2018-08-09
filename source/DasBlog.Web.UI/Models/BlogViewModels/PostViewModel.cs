@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace DasBlog.Web.Models.BlogViewModels
 {
-    public class PostViewModel
-    {
+	public class PostViewModel
+	{
 		[Required]
 		[StringLength(60, MinimumLength = 1)]
 		public string Title { get; set; }
@@ -16,15 +18,17 @@ namespace DasBlog.Web.Models.BlogViewModels
 		[DataType(DataType.MultilineText)]
 		public string Description { get; set; }
 
-        public string Author { get; set; }
+		public string Author { get; set; }
 
-        public string PermaLink { get; set; }
+		public string PermaLink { get; set; }
 
-        public string EntryId { get; set; }
+		public string EntryId { get; set; }
 
-        public IList<CategoryViewModel> Categories { get; set; }
+		public IList<CategoryViewModel> Categories { get; set; } = new List<CategoryViewModel>();
 
-		public IList<CategoryViewModel> AllCategories { get; set; }
+		public IList<CategoryViewModel> AllCategories { get; set; }= new List<CategoryViewModel>();
+
+		public string NewCategory { get; set; }
 
 		[Display(Name = "Allow Comments")]
 		public bool AllowComments { get; set; }
@@ -41,5 +45,10 @@ namespace DasBlog.Web.Models.BlogViewModels
 		public DateTime ModifiedDateTime { get; set; }
 
 		public ListCommentsViewModel Comments { get; set; }
+		
+		public IFormFile Image { get; set; }
+		public string Language { get; set; }
+
+		public IEnumerable<SelectListItem> Languages { get; set; }= new List<SelectListItem>();
 	}
 }

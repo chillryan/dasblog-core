@@ -1,8 +1,4 @@
 ﻿using newtelligence.DasBlog.Runtime;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
 
 namespace DasBlog.Managers.Interfaces
 {
@@ -12,9 +8,9 @@ namespace DasBlog.Managers.Interfaces
 
 		Entry GetEntryForEdit(string postid);
 
-		EntryCollection GetFrontPagePosts();
+		EntryCollection GetFrontPagePosts(string acceptLanguageHeader);
 
-        EntryCollection GetEntriesForPage(int pageIndex);
+        EntryCollection GetEntriesForPage(int pageIndex, string acceptLanguageHeader);
 
 		EntrySaveState CreateEntry(Entry entry);
 

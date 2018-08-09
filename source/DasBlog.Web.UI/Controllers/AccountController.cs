@@ -1,6 +1,6 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using AutoMapper;
+using DasBlog.Core;
 using DasBlog.Web.Models.AccountViewModels;
 using DasBlog.Web.Identity;
 using Microsoft.AspNetCore.Authentication;
@@ -9,14 +9,17 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using DasBlog.Managers.Interfaces;
+using Microsoft.AspNetCore.Http.Extensions;
+using DasBlog.Core.Extensions;
+using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 
 namespace DasBlog.Web.Controllers
 {
 	[Authorize]
-	public class AccountController : Controller
+	public class AccountController : DasBlogController
 	{
 		private const string KEY_RETURNURL = "ReturnUrl";
-		private readonly ILogger logger;
+		private readonly ILogger<AccountController> logger;
 		private readonly IMapper mapper;
 		private readonly SignInManager<DasBlogUser> signInManager;
 		private readonly UserManager<DasBlogUser> userManager;
@@ -25,15 +28,14 @@ namespace DasBlog.Web.Controllers
 			UserManager<DasBlogUser> userManager,
 			SignInManager<DasBlogUser> signInManager,
 			IMapper mapper,
-			ISiteSecurityManager siteSecurityManager,
-			ILoggerFactory loggerFactory)
+			ISiteSecurityManager siteSecurityManager
+			, ILogger<AccountController> logger)
 		{
 			this.signInManager = signInManager;
 			this.userManager = userManager;
 			this.userManager.PasswordHasher = new DasBlogPasswordHasher(siteSecurityManager);
-
+			this.logger = logger;
 			this.mapper = mapper;
-			logger = loggerFactory.CreateLogger<AccountController>();
 		}
 
 		[HttpGet]
@@ -59,8 +61,12 @@ namespace DasBlog.Web.Controllers
 
 				if (result.Succeeded)
 				{
+					logger.LogInformation(new EventDataItem(EventCodes.SecuritySuccess, null
+					  , "{email} logged in successfully", model.Email));
 					return LocalRedirect(returnUrl ?? Url.Action("Index", "Home"));
 				}
+				logger.LogInformation(new EventDataItem(EventCodes.SecuritySuccess, null
+					, "{email} failed to log in", model.Email));
 
 				ModelState.AddModelError(string.Empty, "The username and/or password is incorrect. Please try again.");
 			}

@@ -200,6 +200,7 @@ FakesAssemblies/
 # Visual Studio 6 workspace options file
 *.opt
 source/newtelligence.DasBlog.Web/content/**
+source/DasBlog.Web.UI/logs
 /source/DasBlog.Web.UI/content
 /source/DasBlog.Web.UI/wwwroot/content/Windows-Live-Writer
 /source/DasBlog.Web.UI/wwwroot/content/2017-01-20.dayfeedback.xml
@@ -223,3 +224,6 @@ source/newtelligence.DasBlog.Web/content/**
 /source/DasBlog.Web.UI/wwwroot/content/2016-05-18.dayfeedback.xml
 /source/DasBlog.Web.UI/wwwroot/content/2016-05-18.dayentry.xml
 /source/DasBlog.Web.UI/wwwroot/content/2016-05-12.dayentry.xml
+
+# Rider iDE
+.idea/

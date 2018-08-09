@@ -381,18 +381,24 @@
 	<data name="text_error_contact_email_required">
 		<value>'E-mail' is een verplicht veld. Gelieve een e-mail adres in te geven.</value>
 	</data>
-	<data name="text_error_invalid_email">\
+	<data name="text_error_invalid_email">
 		<value>Het ingegeven e-mail adres bevat een fout, gelieve het adres na te kijken.</value>
 	</data>
-	<data name="text_error_root_required"></data>
+	<data name="text_error_root_required" xml:space="preserve">
+		<value>Root required</value>
+	</data>
 	<data name="text_error_invalid_url">
 		<value>De ingegeven url bevat een fout, gelieve het adres na te kijken.</value>
 	</data>
 	<data name="text_error_copyright_owner_required">
 		<value>'Copyright eigenaar' is een verplicht veld. Gelieve een naam in te geven.</value>
 	</data>
-	<data name="text_error_max_days_required"></data>
-	<data name="text_error_max_days_range"></data>
+	<data name="text_error_max_days_required" xml:space="preserve">
+		<value>Max days required</value>
+	</data>
+	<data name="text_error_max_days_range" xml:space="preserve">
+		<value>Max days out of range</value>
+	</data>
 	<data name="text_referrers_title">
 		<value>Verwijzers</value>
 	</data>
