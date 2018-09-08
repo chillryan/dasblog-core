@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using newtelligence.DasBlog.Util;
+using NodaTime;
 
 namespace DasBlog.Web.Settings
 {
@@ -19,12 +20,13 @@ namespace DasBlog.Web.Settings
 		{
 			this.fileProvider = fileProvider;
 
-			WebRootDirectory = env.ContentRootPath;
+			WebRootDirectory = Startup.GetDataRoot(env);
 			SiteConfiguration = siteConfig.Value;
 			SecurityConfiguration = siteSecurityConfig;
 			MetaTags = metaTagsConfig.Value;
 
 			RssUrl = RelativeToRoot("feed/rss");
+			PingBackUrl = RelativeToRoot("feed/pingback");
 			CategoryUrl = RelativeToRoot("category");
 			ArchiveUrl = RelativeToRoot("archive");
 			MicroSummaryUrl = RelativeToRoot("microsummary");
@@ -33,6 +35,8 @@ namespace DasBlog.Web.Settings
 		}
 
 		public string WebRootDirectory { get; }
+
+		public string PingBackUrl { get; }
 
 		public string RssUrl { get; }
 
@@ -59,7 +63,7 @@ namespace DasBlog.Web.Settings
 
 		public string RelativeToRoot(string relative)
 		{
-			return new Uri(new Uri(SiteConfiguration.Root), relative).LocalPath;
+			return new Uri(new Uri(SiteConfiguration.Root), relative).AbsoluteUri;
 		}
 
         public string GetPermaLinkUrl(string entryId)
@@ -78,12 +82,12 @@ namespace DasBlog.Web.Settings
 
 		public string GetCommentViewUrl(string entryId)
         {
-            return RelativeToRoot("comment/" + entryId);
+            return GetPermaLinkUrl(entryId) + "/comments";
         }
 
         public string GetTrackbackUrl(string entryId)
         {
-            return RelativeToRoot("trackback/" + entryId);
+            return RelativeToRoot("feed/trackback/" + entryId);
         }
 
         public string GetEntryCommentsRssUrl(string entryId)
@@ -108,11 +112,11 @@ namespace DasBlog.Web.Settings
 
 		public User GetUser(string userName)
 		{
-			if (false == String.IsNullOrEmpty(userName))
+			if (false == string.IsNullOrEmpty(userName))
 			{
-				return this.SecurityConfiguration.Users.Find(delegate (User x)
+				return SecurityConfiguration.Users.Find(delegate (User x)
 				{
-					return String.Compare(x.Name, userName, StringComparison.InvariantCultureIgnoreCase) == 0;
+					return string.Compare(x.DisplayName, userName, StringComparison.InvariantCultureIgnoreCase) == 0;
 				});
 			}
 			return null;
@@ -129,15 +133,21 @@ namespace DasBlog.Web.Settings
 			}
 		}
 
-		public TimeZone GetConfiguredTimeZone()
+		public DateTimeZone GetConfiguredTimeZone()
 		{
-			// Need to figure out how to handle time...
-			return new UTCTimeZone();
+			if (SiteConfiguration.AdjustDisplayTimeZone)
+			{
+				return DateTimeZone.ForOffset(Offset.FromHours(SiteConfiguration.DisplayTimeZoneIndex));
+			}
+			else
+			{
+				return DateTimeZone.Utc;
+			}
+		}
 
-			//if (SiteConfiguration.AdjustDisplayTimeZone)
-			//{
-			//    return TimeZone.CurrentTimeZone as WindowsTimeZone;
-			//}
+		public DateTime GetContentLookAhead()
+		{
+			return DateTime.UtcNow.AddDays(SiteConfiguration.ContentLookaheadDays);
 		}
 	}
 }

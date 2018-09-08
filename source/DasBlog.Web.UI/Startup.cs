@@ -24,20 +24,25 @@ using DasBlog.Core.Services;
 using DasBlog.Core.Services.Interfaces;
 using Microsoft.Extensions.FileProviders;
 using DasBlog.Web.TagHelpers.RichEdit;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
+using IHostingEnvironment = Microsoft.AspNetCore.Hosting.IHostingEnvironment;
 
 namespace DasBlog.Web
 {
 	public class Startup
 	{
 		public const string SITESECURITYCONFIG = @"Config\siteSecurity.config";
-		private IHostingEnvironment _hostingEnvironment;
-		private string _binariesPath;
+		private IHostingEnvironment hostingEnvironment;
+		private string binariesPath;
+		public static IServiceCollection DasBlogServices { get; private set; }
+			// TODO find out how to access services from integration tests
 
 		public Startup(IConfiguration configuration, IHostingEnvironment env)
 		{
 			Configuration = configuration;
-			_hostingEnvironment = env;
-			_binariesPath = Configuration.GetValue<string>("binariesDir", "/").TrimStart('~').TrimEnd('/');
+			hostingEnvironment = env;
+			binariesPath = Configuration.GetValue<string>("binariesDir", "/").TrimStart('~').TrimEnd('/');
 		}
 
 		public IConfiguration Configuration { get; }
@@ -51,9 +56,9 @@ namespace DasBlog.Web
 			services.Configure<SiteConfig>(Configuration);
 			services.Configure<MetaTags>(Configuration);
 			services.Configure<LocalUserDataOptions>(options
-			  => options.Path = Path.Combine(_hostingEnvironment.ContentRootPath, SITESECURITYCONFIG));
+			  => options.Path = Path.Combine(GetDataRoot(hostingEnvironment), SITESECURITYCONFIG));
 			services.Configure<ActivityRepoOptions>(options
-			  => options.Path = Path.Combine(_hostingEnvironment.ContentRootPath, Constants.LogDirectory));
+			  => options.Path = Path.Combine(GetDataRoot(hostingEnvironment), Constants.LogDirectory));
 
 			// Add identity types
 			services
@@ -97,6 +102,8 @@ namespace DasBlog.Web
 			{
 				rveo.ViewLocationExpanders.Add(new DasBlogLocationExpander(Configuration.GetSection("DasBlogSettings")["Theme"]));
 			});
+			services.Configure<RouteOptions>(Configuration);
+			
 			services.AddSession(options =>
 			{
 				// Set a short timeout for easy testing.
@@ -113,7 +120,7 @@ namespace DasBlog.Web
 			services.AddScoped<IRichEditBuilder>(SelectRichEditor);
 
 			services
-				.AddSingleton(_hostingEnvironment.ContentRootFileProvider)
+				.AddSingleton(hostingEnvironment.ContentRootFileProvider)
 				.AddSingleton<IBlogManager, BlogManager>()
 				.AddSingleton<ISubscriptionManager, SubscriptionManager>()
 				.AddSingleton<IArchiveManager, ArchiveManager>()
@@ -139,10 +146,11 @@ namespace DasBlog.Web
 				})
 				.AddMvc()
 				.AddXmlSerializerFormatters();
+			DasBlogServices = services;
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-		public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+		public void Configure(IApplicationBuilder app, IHostingEnvironment env, IOptions<RouteOptions> routeOptionsAccessor)
 		{
 			(var siteOk, string siteError) = RepairSite(app);
 			if (env.IsDevelopment())
@@ -160,26 +168,47 @@ namespace DasBlog.Web
 				app.Run(async context => await context.Response.WriteAsync(siteError));
 				return;
 			}
+
+			app.Use((context, next) =>
+			{
+				return next();
+			});
 			app.UseStaticFiles();
 			app.UseStaticFiles(new StaticFileOptions()
 			{
-				FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, _binariesPath.TrimStart('/'))),
-				RequestPath = _binariesPath
+				FileProvider = new PhysicalFileProvider(Path.Combine(GetDataRoot(env), binariesPath.TrimStart('/'))),
+				RequestPath = binariesPath
 			});
 			app.UseAuthentication();
 			app.Use(PopulateThreadCurrentPrincipalForMvc);
 			app.UseMvc(routes =>
 			{
-				routes.MapRoute(
-					"Original Post Format",
-					"{posttitle}.aspx",
-					new { controller = "BlogPost", action = "Post", posttitle = "" });
+				if (routeOptionsAccessor.Value.EnableTitlePermaLinkUnique)
+				{
+					routes.MapRoute(
+						"Original Post Format",
+						"{day:int}/{posttitle}.aspx",
+						new { controller = "BlogPost", action = "Post", posttitle = "" });
 
-				routes.MapRoute(
-					"New Post Format",
-					"{posttitle}",
-					new { controller = "BlogPost", action = "Post", postitle = ""  });
+					routes.MapRoute(
+						"New Post Format",
+						"{day:int}/{posttitle}",
+						new { controller = "BlogPost", action = "Post", postitle = ""  });
 
+				}
+				else
+				{
+					routes.MapRoute(
+						"Original Post Format",
+						"{posttitle}.aspx",
+						new { controller = "BlogPost", action = "Post", posttitle = "" });
+
+					routes.MapRoute(
+						"New Post Format",
+						"{posttitle}",
+						new { controller = "BlogPost", action = "Post", postitle = ""  });
+
+				}
 				routes.MapRoute(
 					name: "default",
 					template: "{controller=Home}/{action=Index}/{id?}");
@@ -250,5 +279,21 @@ namespace DasBlog.Web
 
 			return richEditBuilder;
 		}
+
+		public class RouteOptions
+		{
+			public bool EnableTitlePermaLinkUnique { get; set; }
+		}
+		/// <summary>
+		/// temporary hack pending the rationalisation of Configuration/Options
+		/// </summary>
+		/// <param name="env">I think this must be populated in the initialisation of
+		///       WebHost.CreateDefaultBuilder</param>
+		/// <returns>root locaation for config, logs and blog post content
+		///   typically [project]/source/DasBlog.Web.UI for dev
+		///   and some subdirectory of DasBlog.Tests for functional tests</returns>
+		public static string GetDataRoot(IHostingEnvironment env)
+		  => Environment.GetEnvironmentVariable(Constants.DasBlogDataRoot)
+		  ?? env.ContentRootPath;
 	}
 }

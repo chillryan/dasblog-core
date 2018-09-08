@@ -5,6 +5,7 @@ The [DasBlog Blogging Engine](https://msdn.microsoft.com/en-us/library/aa480016.
 
 [![Build status](https://ci.appveyor.com/api/projects/status/github/poppastring/dasblog-core?branch=master&svg=true)](https://ci.appveyor.com/project/poppastring/dasblog-core)
 
+
 ## Core Tenets - "This we believe"
 
 - We want to pragmatically reuse core DasBlog projects where feasible (includes reusing existing config files).
@@ -36,6 +37,19 @@ git clone https://github.com/[YOUR_GITHUB_ID]/dasblog-core
 
 Change to the "source" directory and open the *DasBlog All.sln* and perform a build.
 
+## Deployment
+
+Currently the most efficient way to deploy dasblog-core is by following the [Overview of deployment in Visual Studio](https://docs.microsoft.com/en-us/visualstudio/deployment/deploying-applications-services-and-components-resources?view=vs-2017).
+
+Configuration settings are as follows:
+- Configuration: Release
+- netcoreapp2.1
+- Self -Contained
+- win-x64
+
+So far deployment to Azure and to a .NET based hosting service provider worked fine, via Web Deploy and FTP respectively. If you have additional questions or concerns please [submit an issue](https://github.com/poppastring/dasblog-core/issues).
+
+
 ## What we have completed so far...
 - Upgraded all existing projects to 4.6.X (for .NET Standard 2 support)
 - Created a new ASP.NET Web Core 2 project that shows the blogs home page with posts
@@ -49,3 +63,5 @@ Change to the "source" directory and open the *DasBlog All.sln* and perform a bu
 - Add/Edit/Delete blog posts
 - Add Comments
 - Support for Live Writer
+- Security and User Management
+- Selenium integration

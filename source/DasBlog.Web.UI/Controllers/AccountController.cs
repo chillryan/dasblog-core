@@ -9,9 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using DasBlog.Managers.Interfaces;
-using Microsoft.AspNetCore.Http.Extensions;
 using DasBlog.Core.Extensions;
-using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 
 namespace DasBlog.Web.Controllers
 {
@@ -74,7 +72,7 @@ namespace DasBlog.Web.Controllers
 			return View(model);
 		}
 
-		[HttpPost]
+		[HttpGet]
 		public async Task<IActionResult> Logout()
 		{
 			await signInManager.SignOutAsync();
@@ -82,7 +80,7 @@ namespace DasBlog.Web.Controllers
 		}
 
 		[HttpGet]
-		public async Task<IActionResult> Register(string returnUrl)
+		public IActionResult Register(string returnUrl)
 		{
 			ViewData[KEY_RETURNURL] = returnUrl;
 

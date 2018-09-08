@@ -1,11 +1,16 @@
 ﻿using System;
+using System.Collections.Specialized;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Linq;
 using newtelligence.DasBlog.Runtime;
 using DasBlog.Managers.Interfaces;
 using DasBlog.Core;
-using newtelligence.DasBlog.Util;
 using EventDataItem = DasBlog.Core.EventDataItem;
 using EventCodes = DasBlog.Core.EventCodes;
 using DasBlog.Core.Extensions;
+using DasBlog.Core.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace DasBlog.Managers
 {
@@ -13,19 +18,31 @@ namespace DasBlog.Managers
 	{
 		private readonly IBlogDataService dataService;
 		private readonly IDasBlogSettings dasBlogSettings;
-		private readonly Microsoft.Extensions.Logging.ILogger logger;
+		private readonly ILogger logger;
+		private static Regex stripTags = new Regex("<[^>]*>", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-		public BlogManager(IDasBlogSettings settings , Microsoft.Extensions.Logging.ILogger<BlogManager> logger)
+		public BlogManager(IDasBlogSettings settings , ILogger<BlogManager> logger)
 		{
 			dasBlogSettings = settings;
 			var loggingDataService = LoggingDataServiceFactory.GetService(dasBlogSettings.WebRootDirectory + dasBlogSettings.SiteConfiguration.LogDir);
 			dataService = BlogDataServiceFactory.GetService(dasBlogSettings.WebRootDirectory + dasBlogSettings.SiteConfiguration.ContentDir, loggingDataService);
 			this.logger = logger;
 		}
-
-		public Entry GetBlogPost(string postid)
+		/// <param name="dt">if non-null then the post must be dated on that date</param>
+		public Entry GetBlogPost(string postid, DateTime? dt)
 		{
-			return dataService.GetEntry(postid);
+			if (dt == null)
+			{
+				return dataService.GetEntry(postid);
+			}
+			else
+			{
+				EntryCollection entries = dataService.GetEntriesForDay(dt.Value, null, null, 1, 10, null);
+				return entries.FirstOrDefault(e => 
+				  dasBlogSettings.GetPermaTitle(e.CompressedTitle)
+				  .Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, string.Empty)
+				  == postid);
+			}
 		}
 
 		public Entry GetEntryForEdit(string postid)
@@ -34,26 +51,10 @@ namespace DasBlog.Managers
 		}
 
 		public EntryCollection GetFrontPagePosts(string acceptLanguageHeader)
-		{
-			DateTime fpDayUtc;
-			TimeZone tz;
-
-			//Need to insert the Request.Headers["Accept-Language"];
-			string languageFilter = acceptLanguageHeader;
-			fpDayUtc = DateTime.UtcNow.AddDays(dasBlogSettings.SiteConfiguration.ContentLookaheadDays);
-
-			if (dasBlogSettings.SiteConfiguration.AdjustDisplayTimeZone)
-			{
-				tz = WindowsTimeZone.TimeZones.GetByZoneIndex(dasBlogSettings.SiteConfiguration.DisplayTimeZoneIndex);
-			}
-			else
-			{
-				tz = new UTCTimeZone();
-			}
-
-			return dataService.GetEntriesForDay(fpDayUtc, TimeZone.CurrentTimeZone,
-								languageFilter,
-								dasBlogSettings.SiteConfiguration.FrontPageDayCount, dasBlogSettings.SiteConfiguration.FrontPageEntryCount, string.Empty);
+		{			
+			return dataService.GetEntriesForDay(dasBlogSettings.GetContentLookAhead(), dasBlogSettings.GetConfiguredTimeZone(),
+								acceptLanguageHeader, dasBlogSettings.SiteConfiguration.FrontPageDayCount, 
+								dasBlogSettings.SiteConfiguration.FrontPageEntryCount, string.Empty);
 		}
 
 		public EntryCollection GetEntriesForPage(int pageIndex, string acceptLanguageHeader)
@@ -93,6 +94,91 @@ namespace DasBlog.Managers
 			return new EntryCollection();
 		}
 
+		
+		public EntryCollection SearchEntries(string searchString, string acceptLanguageHeader)
+		{
+			StringCollection searchWords = new StringCollection();
+
+			string[] splitString = Regex.Split(searchString, @"(""[^""]*"")", RegexOptions.IgnoreCase |
+				RegexOptions.Compiled);
+
+			for (int index = 0; index < splitString.Length; index++)
+			{
+				if (splitString[index] != "")
+				{
+					if (index == splitString.Length - 1)
+					{
+						foreach (string s in splitString[index].Split(' '))
+						{
+							if (s != "") searchWords.Add(s);
+						}
+					}
+					else
+					{
+						searchWords.Add(splitString[index].Substring(1, splitString[index].Length - 2));
+					}
+				}
+			}
+
+			EntryCollection matchEntries = new EntryCollection();
+
+			foreach (Entry entry in dataService.GetEntriesForDay(DateTime.MaxValue.AddDays(-2), 
+							dasBlogSettings.GetConfiguredTimeZone(), acceptLanguageHeader, 
+							int.MaxValue, int.MaxValue, null))
+			{
+				string entryTitle = entry.Title;
+				string entryDescription = entry.Description;
+				string entryContent = entry.Content;
+
+				foreach (string searchWord in searchWords)
+				{
+					if (entryTitle != null)
+					{
+						if (searchEntryForWord(entryTitle, searchWord))
+						{
+							if (!matchEntries.Contains(entry))
+							{
+								matchEntries.Add(entry);
+							}
+							continue;
+						}
+					}
+					if (entryDescription != null)
+					{
+						if (searchEntryForWord(entryDescription, searchWord))
+						{
+							if (!matchEntries.Contains(entry))
+							{
+								matchEntries.Add(entry);
+							}
+							continue;
+						}
+					}
+					if (entryContent != null)
+					{
+						if (searchEntryForWord(entryContent, searchWord))
+						{
+							if (!matchEntries.Contains(entry))
+							{
+								matchEntries.Add(entry);
+							}
+							continue;
+						}
+					}
+				}
+			}
+
+			// log the search to the event log
+/*
+            ILoggingDataService logService = requestPage.LoggingService;
+			string referrer = Request.UrlReferrer != null ? Request.UrlReferrer.AbsoluteUri : Request.ServerVariables["REMOTE_ADDR"];	
+			logger.LogInformation(
+				new EventDataItem(EventCodes.Search, String.Format("{0}", searchString), referrer));
+*/
+
+			return matchEntries;
+		}
+
 		public EntrySaveState CreateEntry(Entry entry)
 		{
 			var rtn = InternalSaveEntry(entry, null, null);
@@ -114,6 +200,15 @@ namespace DasBlog.Managers
 			LogEvent(EventCodes.EntryDeleted, entry);
 		}
 
+		private bool searchEntryForWord(string sourceText, string searchWord)
+		{
+			// Remove any tags from sourceText.
+			sourceText = stripTags.Replace(sourceText, String.Empty);
+
+			CompareInfo myComp = CultureInfo.InvariantCulture.CompareInfo;
+			return (myComp.IndexOf(sourceText, searchWord, CompareOptions.IgnoreCase) >= 0);
+		}
+
 		private void LogEvent(EventCodes eventCode, Entry entry)
 		{
 			logger.LogInformation(
@@ -122,17 +217,22 @@ namespace DasBlog.Managers
 					MakePermaLinkFromCompressedTitle(entry), entry.Title));
 		}
 
-		private string MakePermaLink(Entry entry)
-		{
-			return new Uri(new Uri(dasBlogSettings.SiteConfiguration.Root)
-				,dasBlogSettings.RelativeToRoot(entry.EntryId)).ToString();
-		}
-
 		private Uri MakePermaLinkFromCompressedTitle(Entry entry)
 		{
-			return new Uri(new Uri(dasBlogSettings.SiteConfiguration.Root)
-				,dasBlogSettings.RelativeToRoot(
-				dasBlogSettings.GetPermaTitle(entry.CompressedTitle)));
+			if (dasBlogSettings.SiteConfiguration.EnableTitlePermaLinkUnique)
+			{
+				return new Uri(new Uri(dasBlogSettings.SiteConfiguration.Root)
+					, dasBlogSettings.RelativeToRoot(
+						entry.CreatedUtc.ToString("yyyyMMdd") + "/" +
+						dasBlogSettings.GetPermaTitle(entry.CompressedTitle)));
+			}
+			else
+			{
+				return new Uri(new Uri(dasBlogSettings.SiteConfiguration.Root)
+					,dasBlogSettings.RelativeToRoot(
+					dasBlogSettings.GetPermaTitle(entry.CompressedTitle)));
+			
+			}
 		}
 
 		private EntrySaveState InternalSaveEntry(Entry entry, TrackbackInfoCollection trackbackList, CrosspostInfoCollection crosspostList)
@@ -183,6 +283,11 @@ namespace DasBlog.Managers
 				//TODO: Do something with this????
 				// StackTrace st = new StackTrace();
 				// logService.AddEvent(new EventDataItem(EventCodes.Error, ex.ToString() + Environment.NewLine + st.ToString(), ""));
+
+				LoggedException le = new LoggedException("file failure", ex);
+				var edi = new EventDataItem(EventCodes.Error, null
+				  , "Failed to Save a Post on {date}", System.DateTime.Now.ToShortDateString());
+				logger.LogError(edi,le);
 			}
 
 			// we want to invalidate all the caches so users get the new post

@@ -32,7 +32,7 @@ namespace DasBlog.Web.Mappers
 				.ForMember(dest => dest.AllowComments, opt => opt.MapFrom(src => src.AllowComments))
 				.ForMember(dest => dest.IsPublic, opt => opt.MapFrom(src => src.IsPublic))
 				.ForMember(dest => dest.Syndicated, opt => opt.MapFrom(src => src.Syndicated))
-				.ForMember(dest => dest.PermaLink, opt => opt.MapFrom(src => _dasBlogSettings.GetPermaTitle(src.CompressedTitle)))
+				.ForMember(dest => dest.PermaLink, opt => opt.MapFrom(src => MakePermaLink(src)))
 				.ForMember(dest => dest.CreatedDateTime, opt => opt.MapFrom(src => src.CreatedLocalTime))
 				.ForMember(dest => dest.ModifiedDateTime, opt => opt.MapFrom(src => src.ModifiedLocalTime));
 
@@ -102,6 +102,22 @@ namespace DasBlog.Web.Mappers
 			}
 
 			return hash;
+		}
+
+		private string MakePermaLink(Entry entry)
+		{
+			string link;
+			if (_dasBlogSettings.SiteConfiguration.EnableTitlePermaLinkUnique)
+			{
+				link = entry.CreatedUtc.ToString("yyyyMMdd") + "/" 
+				  + _dasBlogSettings.GetPermaTitle(entry.CompressedTitle);
+			}
+			else
+			{
+				link = _dasBlogSettings.GetPermaTitle(entry.CompressedTitle);
+			}
+
+			return link;
 		}
 	}
 }
