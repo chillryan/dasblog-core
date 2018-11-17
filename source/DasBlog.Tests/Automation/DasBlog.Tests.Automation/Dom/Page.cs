@@ -1,5 +1,6 @@
 ﻿using DasBlog.Tests.Automation.Common;
 using DasBlog.Tests.Automation.Selenium.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace DasBlog.Tests.Automation.Dom
 {
@@ -7,13 +8,12 @@ namespace DasBlog.Tests.Automation.Dom
 	{
 		protected readonly IBrowser browser;
 		protected readonly string path;						// relative to the root e.g. "category" or "account/login"
-		protected readonly string title;
-		// TODO remoe optional from title - two strings / one string is a gotcha
-		public Page(IBrowser browser, string path, string title = null)
+		protected readonly string pageTestId;
+		public Page(IBrowser browser, string path, string pageTestId)
 		{
 			this.browser = browser;
 			this.path = path;
-			this.title = title;
+			this.pageTestId = pageTestId;
 		}
 		public void Goto()
 		{
@@ -22,7 +22,13 @@ namespace DasBlog.Tests.Automation.Dom
 
 		public virtual bool IsDisplayed()
 		{
-			return browser.GetTitle() == title;
+			var elem = browser.GetPageTestIdDiv(pageTestId);
+			if (elem == null)
+			{
+				browser.Logger.LogInformation( browser.GetPageSource());
+			}
+
+			return elem != null;
 		}
 	}
 }

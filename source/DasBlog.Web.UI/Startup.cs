@@ -34,7 +34,7 @@ namespace DasBlog.Web
 {
 	public class Startup
 	{
-		public const string SITESECURITYCONFIG = @"Config\siteSecurity.config";
+		public const string SITESECURITYCONFIG = @"Config/siteSecurity.config";
 		private IHostingEnvironment hostingEnvironment;
 		private string binariesPath;
 		public static IServiceCollection DasBlogServices { get; private set; }
@@ -55,6 +55,10 @@ namespace DasBlog.Web
 			services.AddOptions();
 			services.AddMemoryCache();
 
+			services.Configure<BlogManagerOptions>(Configuration);
+			services.Configure<BlogManagerModifiableOptions>(Configuration);
+			services.Configure<BlogManagerExtraOptions>(opts =>
+				opts.ContentRootPath = GetDataRoot(hostingEnvironment));
 			services.Configure<TimeZoneProviderOptions>(Configuration);
 			services.Configure<SiteConfig>(Configuration);
 			services.Configure<MetaTags>(Configuration);
@@ -91,7 +95,7 @@ namespace DasBlog.Web
 			{
 				options.LoginPath = "/account/login"; // If the LoginPath is not set here, ASP.NET Core will default to /Account/Login
 				options.LogoutPath = "/account/logout"; // If the LogoutPath is not set here, ASP.NET Core will default to /Account/Logout
-				options.AccessDeniedPath = "/account/accessDenied"; // If the AccessDeniedPath is not set here, ASP.NET Core will default to /Account/AccessDenied
+				options.AccessDeniedPath = "/account/accessdenied"; // If the AccessDeniedPath is not set here, ASP.NET Core will default to /Account/AccessDenied
 				options.SlidingExpiration = true;
 				options.Cookie.Expiration = TimeSpan.FromSeconds(10000);
 				options.Cookie = new CookieBuilder
@@ -103,7 +107,7 @@ namespace DasBlog.Web
 
 			services.Configure<RazorViewEngineOptions>(rveo =>
 			{
-				rveo.ViewLocationExpanders.Add(new DasBlogLocationExpander(Configuration.GetSection("DasBlogSettings")["Theme"]));
+				rveo.ViewLocationExpanders.Add(new DasBlogLocationExpander(Configuration.GetSection("Theme").Value));
 			});
 			services.Configure<RouteOptions>(Configuration);
 			
@@ -118,16 +122,17 @@ namespace DasBlog.Web
 				.AddTransient<IUserStore<DasBlogUser>, DasBlogUserStore>()
 				.AddTransient<IRoleStore<DasBlogRole>, DasBlogUserRoleStore>()
 				.AddTransient<IPrincipal>(provider => provider.GetService<IHttpContextAccessor>().HttpContext.User)
-				.AddTransient<ISiteRepairer, SiteRepairer>()
-				;
+				.AddTransient<ISiteRepairer, SiteRepairer>();
+
 			services.AddScoped<IRichEditBuilder>(SelectRichEditor)
-				.AddScoped<IBlogPostViewModelCreator, BlogPostViewModelCreator>()
-				;
+				.AddScoped<IBlogPostViewModelCreator, BlogPostViewModelCreator>();
 
 			services
 				.AddSingleton(hostingEnvironment.ContentRootFileProvider)
 				.AddSingleton<IBlogManager, BlogManager>()
+#if !POSIX
 				.AddSingleton<ISubscriptionManager, SubscriptionManager>()
+#endif
 				.AddSingleton<IArchiveManager, ArchiveManager>()
 				.AddSingleton<ICategoryManager, CategoryManager>()
 				.AddSingleton<ISiteSecurityManager, SiteSecurityManager>()
@@ -141,8 +146,8 @@ namespace DasBlog.Web
 				.AddSingleton<IActivityService, ActivityService>()
 				.AddSingleton<IActivityRepoFactory, ActivityRepoFactory>()
 				.AddSingleton<IEventLineParser, EventLineParser>()
-				.AddSingleton<ITimeZoneProvider, TimeZoneProvider>()
-				;
+				.AddSingleton<ITimeZoneProvider, TimeZoneProvider>();
+
 			services
 				.AddAutoMapper(mapperConfig =>
 				{
@@ -185,6 +190,13 @@ namespace DasBlog.Web
 				FileProvider = new PhysicalFileProvider(Path.Combine(GetDataRoot(env), binariesPath.TrimStart('/'))),
 				RequestPath = binariesPath
 			});
+
+			app.UseStaticFiles(new StaticFileOptions
+			{
+				FileProvider = new PhysicalFileProvider(Path.Combine(GetDataRoot(env), "Themes")),
+				RequestPath = "/theme"
+			});
+
 			app.UseAuthentication();
 			app.Use(PopulateThreadCurrentPrincipalForMvc);
 			app.UseMvc(routes =>
@@ -221,7 +233,7 @@ namespace DasBlog.Web
 			});
 
 			RewriteOptions options = new RewriteOptions()
-				 .AddIISUrlRewrite(env.ContentRootFileProvider, @"Config\IISUrlRewrite.xml");
+				 .AddIISUrlRewrite(env.ContentRootFileProvider, @"Config/IISUrlRewrite.xml");
 
 			app.UseRewriter(options);
 		}
