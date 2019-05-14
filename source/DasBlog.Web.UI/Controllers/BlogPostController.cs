@@ -8,9 +8,9 @@ using DasBlog.Web.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using newtelligence.DasBlog.Runtime;
-using static DasBlog.Core.Common.Utils;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using newtelligence.DasBlog.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -31,11 +31,12 @@ namespace DasBlog.Web.Controllers
 		private readonly IFileSystemBinaryManager binaryManager;
 		private readonly ILogger<BlogPostController> logger;
 		private readonly IBlogPostViewModelCreator modelViewCreator;
+		private IMemoryCache memoryCache;
 
-		public BlogPostController(IBlogManager blogManager, IHttpContextAccessor httpContextAccessor,
-		  IDasBlogSettings settings, IMapper mapper, ICategoryManager categoryManager,
-		  IFileSystemBinaryManager binaryManager, ILogger<BlogPostController> logger,IBlogPostViewModelCreator modelViewCreator) 
-			: base(settings)
+		public BlogPostController(IBlogManager blogManager, IHttpContextAccessor httpContextAccessor, IDasBlogSettings settings, 
+									IMapper mapper, ICategoryManager categoryManager, IFileSystemBinaryManager binaryManager, 
+									ILogger<BlogPostController> logger,IBlogPostViewModelCreator modelViewCreator, IMemoryCache memoryCache) 
+									: base(settings)
 		{
 			this.blogManager = blogManager;
 			this.categoryManager = categoryManager;
@@ -45,26 +46,33 @@ namespace DasBlog.Web.Controllers
 			this.binaryManager = binaryManager;
 			this.logger = logger;
 			this.modelViewCreator = modelViewCreator;
+			this.memoryCache = memoryCache;
 		}
 
 		[AllowAnonymous]
-		public IActionResult Post(string posttitle, int day)
+		public IActionResult Post(string posttitle, string day, string month, string year)
 		{
-			ListPostsViewModel lpvm = new ListPostsViewModel();
-			RouteAffectedFunctions routeAffectedFunctions = new RouteAffectedFunctions(
-			  dasBlogSettings.SiteConfiguration.EnableTitlePermaLinkUnique);
+			var lpvm = new ListPostsViewModel();
+			DateTime postDtTime = DateTime.MinValue;
+			int dayYear = 0;
 
-			if (!routeAffectedFunctions.IsValidDay(day))
+			if (dasBlogSettings.SiteConfiguration.EnableTitlePermaLinkUnique)
+			{
+				dayYear = Convert.ToInt32(string.Format("{0}{1}{2}", year, month, day));
+			}
+
+			var routeAffectedFunctions = new RouteAffectedFunctions(dasBlogSettings.SiteConfiguration.EnableTitlePermaLinkUnique);
+
+			if (!routeAffectedFunctions.IsValidDay(dayYear))
 			{
 				return NotFound();
 			}
 
-			DateTime? dt = routeAffectedFunctions.ConvertDayToDate(day);
+			var dt = routeAffectedFunctions.ConvertDayToDate(dayYear);
 			
-			if (routeAffectedFunctions.IsSpecificPostRequested(posttitle, day))
+			if (routeAffectedFunctions.IsSpecificPostRequested(posttitle, dayYear))
 			{
-				var entry = blogManager.GetBlogPost(posttitle.Replace(
-											dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, string.Empty), dt);
+				var entry = blogManager.GetBlogPost(posttitle.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, string.Empty), dt);
 				if (entry != null)
 				{
 					var pvm = mapper.Map<PostViewModel>(entry);
@@ -93,7 +101,7 @@ namespace DasBlog.Web.Controllers
 		public IActionResult PostGuid(Guid postid)
 		{
 			var lpvm = new ListPostsViewModel();
-			var entry = blogManager.GetBlogPost(postid.ToString(), null);
+			var entry = blogManager.GetBlogPost(postid);
 			if (entry != null)
 			{
 				lpvm.Posts = new List<PostViewModel>() { mapper.Map<PostViewModel>(entry) };
@@ -244,6 +252,8 @@ namespace DasBlog.Web.Controllers
 				ModelState.AddModelError("", "Failed to edit blog post. Please check Logs for more details.");
 			}
 
+			BreakSiteCache();
+
 			return View("views/blogpost/editPost.cshtml", post);
 		}
 
@@ -260,6 +270,8 @@ namespace DasBlog.Web.Controllers
 				RedirectToAction("Error");
 			}
 
+			BreakSiteCache();
+
 			return RedirectToAction("Index", "Home");
 		}
 
@@ -270,7 +282,7 @@ namespace DasBlog.Web.Controllers
 		{
 			ListPostsViewModel lpvm = null;
 
-			var entry = blogManager.GetBlogPost(postid.ToString(), null);
+			var entry = blogManager.GetBlogPost(postid);
 
 			if (entry != null)
 			{
@@ -307,7 +319,7 @@ namespace DasBlog.Web.Controllers
 
 			if (!ModelState.IsValid)
 			{
-				Comment(new Guid(addcomment.TargetEntryId));
+				return Comment(new Guid(addcomment.TargetEntryId));
 			}
 
 			addcomment.Content = dasBlogSettings.FilterHtml(addcomment.Content);
@@ -345,6 +357,8 @@ namespace DasBlog.Web.Controllers
 				return NotFound();
 			}
 
+			BreakSiteCache();
+
 			return Comment(new Guid(addcomment.TargetEntryId));
 		}
 
@@ -362,6 +376,8 @@ namespace DasBlog.Web.Controllers
 			{
 				return NotFound();
 			}
+
+			BreakSiteCache();
 
 			return Ok();
 		}
@@ -381,6 +397,8 @@ namespace DasBlog.Web.Controllers
 				return NotFound();
 			}
 
+			BreakSiteCache();
+
 			return Ok();
 		}
 
@@ -399,6 +417,7 @@ namespace DasBlog.Web.Controllers
 
 			DefaultPage();
 
+			ViewData[Constants.ShowPageControl] = false;
 			return View(BLOG_PAGE, lpvm);
 		}
 
@@ -412,6 +431,7 @@ namespace DasBlog.Web.Controllers
 			if (entries != null )
 			{
 				lpvm.Posts = entries.Select(entry => mapper.Map<PostViewModel>(entry)).ToList();
+				ViewData[Constants.ShowPageControl] = false;
 
 				return View(BLOG_PAGE, lpvm);
 			}
@@ -432,7 +452,7 @@ namespace DasBlog.Web.Controllers
 
 			var newCategory = post.NewCategory?.Trim();
 			var newCategoryDisplayName = newCategory;
-			var newCategoryUrl = EncodeCategoryUrl(newCategory, string.Empty );
+			var newCategoryUrl = Entry.InternalCompressTitle(newCategory);
 					// Category names should not include special characters #200
 			if (post.AllCategories.Any(c => c.CategoryUrl == newCategoryUrl))
 			{
@@ -498,8 +518,14 @@ namespace DasBlog.Web.Controllers
 
 			if (entry != null && string.Compare(entry.EntryId, post.EntryId, true) > 0 )
 			{
-				ModelState.AddModelError(string.Empty, "A post with this title already exists.  Titles must be unique");
+				ModelState.AddModelError(string.Empty, "A post with this title already exists. Titles must be unique");
 			}
+		}
+
+		private void BreakSiteCache()
+		{
+			memoryCache.Remove(CACHEKEY_RSS);
+			memoryCache.Remove(CACHEKEY_FRONTPAGE);
 		}
 
 		private class RouteAffectedFunctions
@@ -537,8 +563,7 @@ namespace DasBlog.Web.Controllers
 					IDictionary<RouteType, Func<int, bool>> isValidDay = new Dictionary<RouteType, Func<int, bool>>
 					{
 						{RouteType.PostTitleOnly, day => true},
-						{RouteType.IncludesDay, day => DateTime.TryParseExact(day.ToString(), DATE_FORMAT
-							, null, DateTimeStyles.AdjustToUniversal, out _)}
+						{RouteType.IncludesDay, day => DateTime.TryParseExact(day.ToString(), DATE_FORMAT, null, DateTimeStyles.AdjustToUniversal, out _)}
 					};
 					return isValidDay[routeType];
 				}

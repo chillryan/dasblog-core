@@ -10,6 +10,38 @@ namespace DasBlog.Tests.Automation.Dom
 		{
 			
 		}
+		public DivPageElement CommentsStartDiv
+		{
+			get { return browser.GetDivById(WebAppConstants.CommentsStartId); }
+		}
+		public LinkPageElement CommentOnThisPostLink
+		{
+			get { return browser.GetLinkById(WebAppConstants.CommentOnThisPostId); }
+		}
+		public LinkPageElement NextPageLink
+		{
+			get { return browser.GetLinkById(WebAppConstants.NextPageId); }
+		}
+		public LinkPageElement PreviousPageLink
+		{
+			get { return browser.GetLinkById(WebAppConstants.PreviousPageId); }
+		}
+		public TextBoxPageElement NameTextBox
+		{
+			get { return browser.GetTextBoxElementById(WebAppConstants.Name); }
+		}
+		public TextBoxPageElement EmailTextBox
+		{
+			get { return browser.GetTextBoxElementById(WebAppConstants.Email); }
+		}
+		public TextBoxPageElement ContentTextBox
+		{
+			get { return browser.GetTextBoxElementById(WebAppConstants.Content); }
+		}
+		public ButtonPageElement SaveContentButton
+		{
+			get { return browser.GetButtonById(WebAppConstants.SaveContentButtonId); }
+		}
 
 	}
 }

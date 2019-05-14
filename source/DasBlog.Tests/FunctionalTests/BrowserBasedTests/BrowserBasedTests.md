@@ -3,7 +3,7 @@
 ##### Usage
 change directory to the project directory (containing .git) usually called dasblog-core and do
 ```
-dotnet test source/DasBlog.Tests/FunctionalTests --logger trx;LogfileName=browsser_based_test_results.xml --results-directory=./test_results --filter Category=BrowserBasedTest
+dotnet test source/DasBlog.Tests/FunctionalTests --logger trx;LogfileName=browsser_based_test_results.xml --results-directory ./test_results --filter Category=BrowserBasedTest
 ``` 
 For failing tests the logs will be printed along with the results.  If you need to inspect the logs for passing tests
 the the location  is `source/DasBlog.Tests/FunctioalTests/test_results/browser_based_test_results.xml`.  You will
@@ -202,3 +202,15 @@ The test mechanism employs [Selenium](../../../SeleniumPlusDasBlogCoreInACoupleO
 
 All browser based tests must use the same test data environment as they rely on the web app running continuously
 in a separate process.
+
+##### Configuration
+One approach to inspecting and manipulating the Vanilla environment (used by the browser based tests)
+is to point the web app at the Vanilla environment and run it in normal interactive mode.
+
+To change the data environment set up the following environment variable:
+```
+DAS_BLOG_DATA_ROOT=<projects>/dasblog-core/source/DasBlog.Tests/Resources/Environments/Vanilla
+```
+
+Remember to commit all changes in the Environments directory tree and remove any un-tracked files created 
+such as the logs to avoid subsequent tests failing

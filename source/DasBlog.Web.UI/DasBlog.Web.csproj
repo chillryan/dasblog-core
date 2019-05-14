@@ -9,7 +9,7 @@
     <Authors>Mark Downie</Authors>
     <Company />
     <Product>DasBlog Core</Product>
-    <Configurations>Debug;Release;posix</Configurations>
+    <Configurations>Debug;Release</Configurations>
     <Platforms>AnyCPU</Platforms>
   </PropertyGroup>
   <ItemGroup>
@@ -28,28 +28,19 @@
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="6.2.2" />
     <!--<PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="3.2.0" />-->
-    <PackageReference Include="Microsoft.AspNetCore.App" Version="2.1.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Formatters.Xml" Version="2.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.Razor.Design" Version="2.1.2" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="2.1.0" />
     <PackageReference Include="Microsoft.VisualStudio.Web.BrowserLink" Version="2.1.0" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="2.1.0" />
-    <!--<PackageReference Include="NetEscapades.Extensions.Logging.RollingFile" Version="1.0.0" />-->
+    <PackageReference Include="NetEscapades.Extensions.Logging.RollingFile" Version="1.0.1" />
   </ItemGroup>
   <ItemGroup>
     <None Include="config\site.config" />
   </ItemGroup>
-  <PropertyGroup Condition="'$(Configuration)'=='posix'">
-    <DefineConstants>POSIX</DefineConstants>
-  </PropertyGroup>
-  <ItemGroup Condition="'$(Configuration)'=='posix'">
-    <Compile Remove="Controllers\FeedController.cs" />
-    <None Include="Controllers\FeedController.cs" />
-  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DasBlog.Web.Core\DasBlog.Core.csproj" />
     <ProjectReference Include="..\DasBlog.Web.Repositories\DasBlog.Managers.csproj" />
-    <ProjectReference Include="..\NetEscapades.Extensions.Logging.RollingFile\NetEscapades.Extensions.Logging.RollingFile.csproj" />
+    <!--<ProjectReference Include="..\NetEscapades.Extensions.Logging.RollingFile\NetEscapades.Extensions.Logging.RollingFile.csproj" />-->
   </ItemGroup>
   <ItemGroup>
     <Content Update="Config\site.config">
@@ -126,6 +117,7 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="content\binary\" />
+    <Folder Include="Properties" />
   </ItemGroup>
   <!--
   <ItemGroup>

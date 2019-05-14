@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using DasBlog.Managers.Interfaces;
+using DasBlog.Core.Services.Rss20;
+using DasBlog.Core.Services.Rsd;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Primitives;
-using DasBlog.Managers.Interfaces;
-using newtelligence.DasBlog.Web.Services.Rss20;
-using Microsoft.AspNetCore.Http;
-using newtelligence.DasBlog.Web.Services.Rsd;
+using System;
 using System.IO;
 
 namespace DasBlog.Web.Controllers
@@ -18,7 +14,6 @@ namespace DasBlog.Web.Controllers
         private IMemoryCache memoryCache;
         private readonly ISubscriptionManager subscriptionManager;
 		private readonly IXmlRpcManager xmlRpcManager;
-		private const string RSS_CACHE_KEY = "RSS_CACHE_KEY";
 
         public FeedController(ISubscriptionManager subscriptionManager, IHttpContextAccessor httpContextAccessor,
 								IXmlRpcManager xmlRpcManager, IMemoryCache memoryCache)
@@ -32,36 +27,30 @@ namespace DasBlog.Web.Controllers
         [HttpGet("feed/rss")]
         public IActionResult Rss()
         {
-            RssRoot rss = null; 
 
-            if (!memoryCache.TryGetValue(RSS_CACHE_KEY, out rss))
-            {
-                rss = subscriptionManager.GetRss();
+			if (!memoryCache.TryGetValue(CACHEKEY_RSS, out RssRoot rss))
+			{
+				rss = subscriptionManager.GetRss();
 
-                var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(5));
+				memoryCache.Set(CACHEKEY_RSS, rss, SiteCacheSettings());
+			}
 
-                memoryCache.Set(RSS_CACHE_KEY, rss, cacheEntryOptions);
-            }
-
-            return Ok(rss);
+			return Ok(rss);
         }
 
 		[Produces("text/xml")]
 		[HttpGet("feed/rss/{category}")]
         public IActionResult RssByCategory(string category)
         {
-            RssRoot rss = null;
 
-            if (!memoryCache.TryGetValue(RSS_CACHE_KEY + "_" + category, out rss))
-            {
-                rss = subscriptionManager.GetRssCategory(category);
+			if (!memoryCache.TryGetValue(CACHEKEY_RSS + "_" + category, out RssRoot rss))
+			{
+				rss = subscriptionManager.GetRssCategory(category);
 
-                var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(5));
+				memoryCache.Set(CACHEKEY_RSS + "_" + category, rss, SiteCacheSettings());
+			}
 
-                memoryCache.Set(RSS_CACHE_KEY + "_" + category, rss, cacheEntryOptions);
-            }
-
-            return Ok(rss);
+			return Ok(rss);
         }
 
 		[Produces("text/xml")]
@@ -92,7 +81,7 @@ namespace DasBlog.Web.Controllers
 		[HttpPost("feed/blogger")]
 		public IActionResult BloggerPost()
 		{
-			string blogger = string.Empty;
+			var blogger = string.Empty;
 
 			using (var mem = new MemoryStream())
 			{
@@ -100,7 +89,15 @@ namespace DasBlog.Web.Controllers
 				blogger = xmlRpcManager.Invoke(mem);
 			}
 
+			BreakSiteCache();
+
 			return Content(blogger);
 		}
-    }
+
+		private void BreakSiteCache()
+		{
+			memoryCache.Remove(CACHEKEY_RSS);
+			memoryCache.Remove(CACHEKEY_FRONTPAGE);
+		}
+	}
 }

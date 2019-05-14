@@ -130,9 +130,6 @@ namespace DasBlog.Web
 			services
 				.AddSingleton(hostingEnvironment.ContentRootFileProvider)
 				.AddSingleton<IBlogManager, BlogManager>()
-#if !POSIX
-				.AddSingleton<ISubscriptionManager, SubscriptionManager>()
-#endif
 				.AddSingleton<IArchiveManager, ArchiveManager>()
 				.AddSingleton<ICategoryManager, CategoryManager>()
 				.AddSingleton<ISiteSecurityManager, SiteSecurityManager>()
@@ -193,7 +190,7 @@ namespace DasBlog.Web
 
 			app.UseStaticFiles(new StaticFileOptions
 			{
-				FileProvider = new PhysicalFileProvider(Path.Combine(GetDataRoot(env), "Themes")),
+				FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, "Themes")),
 				RequestPath = "/theme"
 			});
 
@@ -210,12 +207,12 @@ namespace DasBlog.Web
 				{
 					routes.MapRoute(
 						"Original Post Format",
-						"{day:int}/{posttitle}.aspx",
+						"{year:int}/{month:int}/{day:int}/{posttitle}.aspx",
 						new { controller = "BlogPost", action = "Post", posttitle = "" });
 
 					routes.MapRoute(
 						"New Post Format",
-						"{day:int}/{posttitle}",
+						"{year:int}/{month:int}/{day:int}/{posttitle}",
 						new { controller = "BlogPost", action = "Post", postitle = ""  });
 
 				}

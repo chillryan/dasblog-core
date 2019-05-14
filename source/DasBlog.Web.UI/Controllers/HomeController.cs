@@ -1,15 +1,17 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Linq;
 using AutoMapper;
 using DasBlog.Core;
+using DasBlog.Core.Common;
 using DasBlog.Managers.Interfaces;
 using DasBlog.Web.Models;
 using DasBlog.Web.Models.BlogViewModels;
 using DasBlog.Web.Settings;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace DasBlog.Web.Controllers
 {
@@ -19,26 +21,37 @@ namespace DasBlog.Web.Controllers
 		private readonly IDasBlogSettings dasBlogSettings;
 		private readonly IMapper mapper;
 		private readonly ILogger<HomeController> logger;
-		
+		private IMemoryCache memoryCache;
+
 		public HomeController(IBlogManager blogManager, IDasBlogSettings settings, IXmlRpcManager rpcManager, 
-							IMapper mapper, ILogger<HomeController> logger) : base(settings)
+							IMapper mapper, ILogger<HomeController> logger, IMemoryCache memoryCache) : base(settings)
 		{
 			this.blogManager = blogManager;
 			dasBlogSettings = settings;
 			this.mapper = mapper;
 			this.logger = logger;
+			this.memoryCache = memoryCache;
 		}
 
 		public IActionResult Index()
 		{
-			var lpvm = new ListPostsViewModel
+			if (!memoryCache.TryGetValue(CACHEKEY_FRONTPAGE, out ListPostsViewModel lpvm))
 			{
-				Posts = blogManager.GetFrontPagePosts(Request.Headers["Accept-Language"])
-							.Select(entry => mapper.Map<PostViewModel>(entry)).
-							Select(editentry => editentry).ToList()
-			};
+				lpvm = new ListPostsViewModel
+				{
+					Posts = blogManager.GetFrontPagePosts(Request.Headers["Accept-Language"])
+								.Select(entry => mapper.Map<PostViewModel>(entry))
+								.Select(editentry => editentry).ToList()
+				};
 
-			logger.LogDebug($"In Index - {lpvm.Posts.Count} post found");
+				memoryCache.Set(CACHEKEY_FRONTPAGE, lpvm, SiteCacheSettings());
+
+				logger.LogDebug($"In Index - {lpvm.Posts.Count} post found");
+			}
+
+			ViewData[Constants.ShowPageControl] = true;			
+			ViewData[Constants.PageNumber] = 0;
+			ViewData[Constants.PostCount] = lpvm.Posts.Count;
 
 			return AggregatePostView(lpvm);
 		}
@@ -57,13 +70,16 @@ namespace DasBlog.Web.Controllers
 				return Index();
 			}
 
-			ViewData["Message"] = string.Format("Page...{0}", index);
 
 			var lpvm = new ListPostsViewModel
 			{
 				Posts = blogManager.GetEntriesForPage(index, Request.Headers["Accept-Language"])
 								.Select(entry => mapper.Map<PostViewModel>(entry)).ToList()
 			};
+			ViewData["Message"] = string.Format("Page...{0}", index);
+			ViewData[Constants.ShowPageControl] = true;			
+			ViewData[Constants.PageNumber] = index;
+			ViewData[Constants.PostCount] = lpvm.Posts.Count;
 
 			return AggregatePostView(lpvm);
 		}

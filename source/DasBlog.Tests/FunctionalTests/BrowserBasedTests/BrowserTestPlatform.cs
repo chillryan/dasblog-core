@@ -20,8 +20,17 @@ namespace DasBlog.Tests.FunctionalTests.BrowserBasedTests
 		public IPublisher Publisher { get; private set; }
 		public ITestExecutor TestExecutor { get; private set; }
 		public Pages Pages { get; private set; }
-		private IDasBlogSandbox sandbox;
 
+		private IDasBlogSandbox sandbox;
+		public IDasBlogSandbox Sandbox
+		{
+			get { return sandbox ?? throw new NullReferenceException("You must call TestPlatform.CompleteSetup before accessing the sandboxc"); }
+		}
+
+		public ITestDataProcessor CreateTestDataProcessor()
+		{
+			return new TestDataProcesor(Sandbox.TestEnvironmentPath);
+		}
 		/// <summary>
 		/// completes the platform setup after the logger has been created although
 		/// it's not clear that the instantiation has to take place after the logger has been configured.
@@ -34,9 +43,10 @@ namespace DasBlog.Tests.FunctionalTests.BrowserBasedTests
 			Publisher = ServiceProvider.GetService<IPublisher>();
 			Pages = new Pages(Browser);
 			var sandboxFactory = ServiceProvider.GetService<IDasBlogSandboxFactory>();
-			sandbox = sandboxFactory.CreateSandbox(ServiceProvider, Constants.VanillaEnvironment);
+			sandbox = sandboxFactory.CreateSandbox(ServiceProvider, Constants.BbtEnvironment);
 			sandbox.Init();
 			Environment.SetEnvironmentVariable(WebAppConstants.DasBlogDataRoot, sandbox.TestEnvironmentPath);
+			Environment.SetEnvironmentVariable(WebAppConstants.DasBlogOverrideRootUrl, "1");
 			this.Runner.RunDasBlog();
 			this.Browser.Init();
 		}
@@ -75,5 +85,6 @@ namespace DasBlog.Tests.FunctionalTests.BrowserBasedTests
 		}
 		protected override string AppSettingsPathRelativeToProject { get; set; } =
 			Constants.BrowserBasedTestsRelativeToProject;
+		
 	}
 }

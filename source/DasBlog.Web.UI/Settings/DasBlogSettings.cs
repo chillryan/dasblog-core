@@ -1,17 +1,18 @@
-﻿using System;
-using System.IO;
-using System.Net;
-using System.Xml.Serialization;
+﻿using DasBlog.Core;
+using DasBlog.Core.Common;
+using DasBlog.Core.Common.Comments;
 using DasBlog.Core.Configuration;
 using DasBlog.Core.Security;
-using DasBlog.Core;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using NodaTime;
+using System;
+using System.IO;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Text;
-using newtelligence.DasBlog.Web.Core;
+using System.Xml.Serialization;
 
 namespace DasBlog.Web.Settings
 {
@@ -119,7 +120,7 @@ namespace DasBlog.Web.Settings
 		}
 		public string GetCommentViewUrl(string entryId)
         {
-            return GetPermaLinkUrl(entryId) + "/comments";
+            return GetPermaLinkUrl(entryId) + $"/comments#{Constants.CommentsStartId}";
         }
 
         public string GetTrackbackUrl(string entryId)
@@ -206,9 +207,6 @@ namespace DasBlog.Web.Settings
 
 		public string FilterHtml(string input)
 		{
-#if POSIX
-			return input;
-#else
 			if (SiteConfiguration.AllowedTags == null || SiteConfiguration.AllowedTags.Count == 0)
 			{
 				return WebUtility.HtmlEncode(input);
@@ -224,6 +222,7 @@ namespace DasBlog.Web.Settings
 			}
 
 			StringBuilder sb = new StringBuilder();
+
 
 			MatchedTagCollection collection = new MatchedTagCollection(SiteConfiguration.AllowedTags);
 			collection.Init(matches);
@@ -253,7 +252,6 @@ namespace DasBlog.Web.Settings
 			}
 
 			return sb.ToString();
-#endif // #if POSIX #else
 		}
 
 		public bool AreCommentsPermitted(DateTime blogpostdate)

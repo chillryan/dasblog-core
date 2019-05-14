@@ -7,6 +7,8 @@ namespace DasBlog.Managers.Interfaces
     {
         Entry GetBlogPost(string postid, DateTime? postDate);
 
+		Entry GetBlogPost(Guid postid);
+
 		Entry GetEntryForEdit(string postid);
 
 		EntryCollection GetFrontPagePosts(string acceptLanguageHeader);
@@ -24,7 +26,7 @@ namespace DasBlog.Managers.Interfaces
 		CommentSaveState AddComment(string postid, Comment comment);
 
 		CommentSaveState DeleteComment(string postid, string commentid);
-		// TODO: Issue: Comment approval not working #210 
+		
 		CommentSaveState ApproveComment(string postid, string commentid);
 
 		CommentCollection GetComments(string postid, bool allComments);

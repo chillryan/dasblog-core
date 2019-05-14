@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>netcoreapp2.1</TargetFramework>
     <IsPackable>false</IsPackable>
-    <Configurations>Debug;Release;posix</Configurations>
+    <Configurations>Debug;Release</Configurations>
     <Platforms>AnyCPU</Platforms>
   </PropertyGroup>
   <ItemGroup>
@@ -12,8 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Remove="Config\metaConfig.xml" />
-    <None Remove="Config\site.config" />
-    <None Remove="Config\siteSecurity.config" />
     <None Remove="TestContent\2003-07-31.dayentry.xml" />
     <None Remove="TestContent\2003-08-01.dayentry.xml" />
     <None Remove="TestContent\2004-01-13.dayentry.xml" />
@@ -27,12 +25,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Config\metaConfig.xml" />
-    <Content Include="Config\site.config">
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
-    <Content Include="Config\siteSecurity.config">
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
     <Content Include="TestContent\2003-07-31.dayentry.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -65,21 +57,14 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.Razor.Design" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.7.0" />
     <PackageReference Include="Moq" Version="4.8.2" />
     <PackageReference Include="xunit" Version="2.3.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.3.1" />
     <DotNetCliToolReference Include="dotnet-xunit" Version="2.3.1" />
-  </ItemGroup>
-  <PropertyGroup Condition="'$(Configuration)'=='posix'">
-    <DefineConstants>POSIX</DefineConstants>
-  </PropertyGroup>
-  <ItemGroup Condition="'$(Configuration)'=='posix'">
-    <ProjectReference Include="..\..\newtelligence.DasBlog.Runtime.netstd\newtelligence.DasBlog.Runtime.netstd.csproj" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)'!='posix'">
-    <ProjectReference Include="..\..\newtelligence.DasBlog.Runtime\newtelligence.DasBlog.Runtime.csproj" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\DasBlog.Web.Core\DasBlog.Core.csproj" />
