@@ -1,11 +1,13 @@
 ﻿using AutoMapper;
-using DasBlog.Core;
 using DasBlog.Web.Models.BlogViewModels;
 using DasBlog.Core.Common;
 using DasBlog.Core.Extensions;
 using newtelligence.DasBlog.Runtime;
 using System.Collections.Generic;
 using System.Linq;
+using DasBlog.Services;
+using DasBlog.Core.Common.Comments;
+using DasBlog.Web.Models.AdminViewModels;
 
 namespace DasBlog.Web.Mappers
 {
@@ -23,8 +25,8 @@ namespace DasBlog.Web.Mappers
 
 			CreateMap<Entry, PostViewModel>()
 				.ForMember(dest => dest.Title, opt => opt.MapFrom(src => src.Title))
-				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
-				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content ?? string.Empty))
+				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description ?? string.Empty))
 				.ForMember(dest => dest.Categories, opt => opt.MapFrom(src => ConvertCategory(src.Categories)))
 				.ForMember(dest => dest.EntryId, opt => opt.MapFrom(src => src.EntryId))
 				.ForMember(dest => dest.AllowComments, opt => opt.MapFrom(src => src.AllowComments))
@@ -37,8 +39,8 @@ namespace DasBlog.Web.Mappers
 
 			CreateMap<PostViewModel, Entry>()
 				.ForMember(dest => dest.Title, opt => opt.MapFrom(src => src.Title))
-				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
-				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => (src.Description == null) ? string.Empty : src.Description))
+				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content ?? string.Empty))
+				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description ?? string.Empty))
 				.ForMember(dest => dest.Categories, opt => opt.MapFrom(src => string.Join(";", src.AllCategories.Where(x => x.Checked).Select(x => x.Category))))
 				.ForMember(dest => dest.EntryId, opt => opt.MapFrom(src => src.EntryId))
 				.ForMember(dest => dest.AllowComments, opt => opt.MapFrom(src => src.AllowComments))
@@ -61,7 +63,9 @@ namespace DasBlog.Web.Mappers
 				.ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.CreatedLocalTime))
 				.ForMember(dest => dest.HomePageUrl, opt => opt.MapFrom(src => src.AuthorHomepage))
 				.ForMember(dest => dest.BlogPostId, opt => opt.MapFrom(src => src.TargetEntryId))
-				.ForMember(dest => dest.CommentId, opt => opt.MapFrom(src => src.EntryId));
+				.ForMember(dest => dest.CommentId, opt => opt.MapFrom(src => src.EntryId))
+				.ForMember(dest => dest.SpamState, opt => opt.MapFrom(src => src.SpamState))
+				.ForMember(dest => dest.IsPublic, opt => opt.MapFrom(src => src.IsPublic)); ;
 
 			CreateMap<AddCommentViewModel, Comment>()
 				.ForMember(dest => dest.Author, opt => opt.MapFrom(src => src.Name))
@@ -73,13 +77,31 @@ namespace DasBlog.Web.Mappers
 			CreateMap<Entry, CategoryPostItem>()
 				.ForMember(dest => dest.BlogTitle, opt => opt.MapFrom(src => src.Title))
 				.ForMember(dest => dest.BlogId, opt => opt.MapFrom(src => src.EntryId));
+
+
+			CreateMap<Tag, TagViewModel>()
+				.ForMember(dest => dest.Allowed, opt => opt.MapFrom(src => src.Allowed))
+				.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+				.ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes));
+
+			CreateMap<TagViewModel, Tag>()
+				.ForMember(dest => dest.Allowed, opt => opt.MapFrom(src => src.Allowed))
+				.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+				.ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes));
+
+			CreateMap<ValidCommentTags, ValidCommentTagsViewModel>()
+				.ForMember(dest => dest.Tag, opt => opt.MapFrom(src => src.Tag));
+
+			CreateMap<ValidCommentTagsViewModel, ValidCommentTags>()
+				.ForMember(dest => dest.Tag, opt => opt.MapFrom(src => src.Tag));
+
 		}
 
 		private IList<CategoryViewModel> ConvertCategory(string category)
 		{
 			return category.Split(";").ToList().Select(c => new CategoryViewModel {
 													Category = c,
-													CategoryUrl = Entry.InternalCompressTitle(c, _dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement).ToLower() })
+													CategoryUrl = _dasBlogSettings.CompressTitle(c) })
 													.ToList();
 		}
 

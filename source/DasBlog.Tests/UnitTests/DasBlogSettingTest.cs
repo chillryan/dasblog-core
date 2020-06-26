@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
-using System.Xml.Serialization;
-using DasBlog.Core;
-using DasBlog.Core.Configuration;
 using DasBlog.Core.Security;
+using DasBlog.Services.ConfigFile;
+using DasBlog.Services.ConfigFile.Interfaces;
 using Microsoft.Extensions.FileProviders;
 using NodaTime;
+using System.Xml.Serialization;
+using DasBlog.Services;
 
 namespace DasBlog.Tests.UnitTests
 {
@@ -32,7 +32,7 @@ namespace DasBlog.Tests.UnitTests
 			RssUrl = RelativeToRoot("feed/rss");
 			CategoryUrl = RelativeToRoot("category");
 			ArchiveUrl = RelativeToRoot("archive");
-			MicroSummaryUrl = RelativeToRoot("microsummary");
+			MicroSummaryUrl = RelativeToRoot("site/microsummary");
 			RsdUrl = RelativeToRoot("rsd");
 			ShortCutIconUrl = RelativeToRoot("icon.jpg");
 			ThemeCssUrl = RelativeToRoot(string.Format("{0}.css", SiteConfiguration.Theme));
@@ -56,9 +56,9 @@ namespace DasBlog.Tests.UnitTests
 
 		public string ThemeCssUrl { get; }
 
-		public IMetaTags MetaTags { get; }
+		public IMetaTags MetaTags { get; set; }
 
-		public ISiteConfig SiteConfiguration { get; }
+		public ISiteConfig SiteConfiguration { get; set; }
 
 		public ISiteSecurityConfig SecurityConfiguration { get; }
 
@@ -212,6 +212,11 @@ namespace DasBlog.Tests.UnitTests
 		public bool AreCommentsPermitted(DateTime blogpostdate)
 		{
 			return true;
+		}
+
+		public string CompressTitle(string title)
+		{
+			throw new NotImplementedException();
 		}
 	}
 }

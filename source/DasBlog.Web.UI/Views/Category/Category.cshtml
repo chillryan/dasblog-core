@@ -1,4 +1,4 @@
-﻿@using DasBlog.Core;
+﻿@using DasBlog.Services;
 @using DasBlog.Core.Common;
 @using System.Net;
 @inject IDasBlogSettings dasBlogSettings
@@ -7,8 +7,6 @@
 @{
     ViewData["Title"] = Constants.CategoryPageTitle;
 }
-
-<div id="@Constants.CategoryPageTestId" class="@Constants.PageTestIdClass"></div>
 
 <div class="container">
     <div class="row">
@@ -25,7 +23,7 @@
     <div>
         @foreach (var category in Model.Categories)
         {
-            <a name="@WebUtility.UrlEncode(category.Key)"><h4>@category.Key (@category.Value.Count())</h4></a>
+            <a name="@WebUtility.UrlEncode(category.Key)" href="category/@dasBlogSettings.CompressTitle(category.Key)" ><h4>@category.Key (@category.Value.Count())</h4></a>
             @foreach (var post in category.Value)
             {
                 <div>

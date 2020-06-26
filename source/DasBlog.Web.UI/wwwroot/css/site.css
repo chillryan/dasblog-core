@@ -1,135 +1,93 @@
 ﻿
-/* QR code generator */
-#qrCode {
-    margin: 15px;
+/* Calendar Styling  */
+
+.clearfix::after,
+.dbc-calendar ol::after {
+    content: ".";
+    display: block;
+    height: 0;
+    clear: both;
+    visibility: hidden;
 }
 
-/* Calendar */
-ul {
-    list-style-type: none;
+.dbc-calendar {
+    border-radius: 10px;
 }
 
 .month {
-    display: block;
-    padding: 30px 15px;
-    text-align: center;
+    font-size: 2rem;
 }
 
-    .month ul {
-        margin: 0px;
-        padding: 0px;
+@media (min-width: 992px) {
+    .month {
+        font-size: 3.5rem;
+    }
+}
+
+.dbc-calendar ol li {
+    float: left;
+    width: 14.28571%;
+}
+
+.dbc-calendar .day-names {
+    border-bottom: 1px solid #eee;
+}
+
+    .dbc-calendar .day-names li {
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
     }
 
-        .month ul li {
-            font-size: 14px;
-            text-transform: capitalize;
+.dbc-calendar .days li {
+    border-bottom: 1px solid #eee;
+    min-height: 8rem;
+}
+
+    .dbc-calendar .days li .date {
+        margin: 0.5rem 0;
+    }
+
+    .dbc-calendar .days li .event {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.1rem 0.2rem 0.1rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 1px;
+    }
+
+        .dbc-calendar .days li .event.span-2 {
+            width: 200%;
         }
 
-    .month .prev {
-        float: left;
-        padding-top: 10px;
-    }
-
-    .month .next {
-        float: right;
-        padding-top: 10px;
-    }
-
-/* Weekdays (Mon-Sun) */
-.weekdays {
-    line-height: 56px;
-    text-align: center;
-}
-
-    .weekdays li {
-        display: inline-block;
-        padding-left: 10px;
-        padding-right: 10px;
-        width: 13.6%;
-        text-align: center;
-    }
-
-.days {
-    padding: 10px 0px;
-    margin: 0px;
-}
-
-    .days li {
-        list-style-type: none;
-        display: inline-flex;
-        height: 75px;
-        width: 13.6%;
-        margin-bottom: 5px;
-        font-size: 12px;
-        padding: 2px;
-    }
-
-        .days li > .day {
-            display: block;
-            padding-left: 30px;
+        .dbc-calendar .days li .event.begin {
+            border-radius: 1rem 0 0 1rem;
         }
-/* this is us
-    ed by the NicEdit conrol */        
- .nicEdit-main {
-     overflow: auto !important;
-     height: 5.5em;
- }
-        
 
-.users-sidebar {
-    max-height: 500px;
-    overflow-y: scroll;
-}        
+        .dbc-calendar .days li .event.end {
+            border-radius: 0 1rem 1rem 0;
+        }
 
-/* workaround-users - could not persuade bootstrap to lay out components on 
-   a desktop browser so introduced these hacks.  No idea of effect on small screens */
-.workaround-users-1 {
-    padding-top: 15px;
-}
-.workaround-users-2 {
-    padding-left: 15px;
-}
-.workaround-users-3 {
-     margin-bottom: 15px;
-}
+        .dbc-calendar .days li .event.clear {
+            background: none;
+        }
 
-.activityTableColumnStyle {
+    .dbc-calendar .days li:nth-child(n+29) {
+        border-bottom: none;
+    }
+
+    .dbc-calendar .days li.outside .date {
+        color: #ddd;
+    }
+
+
+.dbc-activity-table-column {
     border: solid 1px;
     padding: 3px;
     margin-top: 3px;
     margin-bottom: 3px;
 }
 
-.activityTableDateColumnStyle {
-    border: solid 1px;
-    padding: 3px;
-    margin-top: 3px;
-    margin-bottom: 3px;
-    width: 25%;
-    text-align: left;
-}
-
-.activityTableFooterColumnStyle {
-    border-left: solid 1px;
-    border-right: solid 1px;
-    border-bottom: solid 1px;
-    border-top: solid 2px;
-    padding: 3px;
-    font-weight: bold;
-}
-
-.activityTableFooterNumColumnStyle {
-    border-left: solid 1px;
-    border-right: solid 1px;
-    border-bottom: solid 1px;
-    border-top: solid 2px;
-    padding: 3px;
-    width: 15%;
-    font-weight: bold;
-    text-align: right;
-}
-
-.activityTableHeaderColumnStyle {
+.dbc-activity-table-header-column {
     border-left: solid 1px;
     border-right: solid 1px;
     border-bottom: solid 2px;
@@ -139,16 +97,7 @@ ul {
     font-weight: bold;
 }
 
-.activityTableNumColumnStyle {
-    border: solid 1px;
-    padding: 3px;
-    margin-top: 3px;
-    margin-bottom: 3px;
-    width: 15%;
-    text-align: right;
-}
-
-.activityTableStyle {
+.dbc-activity-table {
     margin-top: 10px;
     margin-bottom: 10px;
     border: solid 1px;
@@ -156,12 +105,13 @@ ul {
     border-collapse: collapse;
 }
 
-.activityTableRowStyleError { BACKGROUND-COLOR: lightpink }
-.activityTableRowStyleBlocked { BACKGROUND-COLOR: lightgoldenrodyellow }
-.activityTableRowStyleSecurityFailure { BACKGROUND-COLOR: lightsalmon }
+.dbc-activity-rable-row-error { BACKGROUND-COLOR: lightpink }
+.dbc-activity-table-row-blocked { BACKGROUND-COLOR: lightgoldenrodyellow }
+.dbc-activity-table-row-security-failure { BACKGROUND-COLOR: lightsalmon }
+
 
 /* align with bootstrap (grid-framework.scss) */
-.blogpost-fields-allignment-compatibility { 
+.dbc-blogpost-fields-allignment-compatibility { 
     padding-left: 15px;
     padding-right: 15px; 
 }
@@ -173,3 +123,30 @@ ul {
         display: none;
     }
 }
+
+.dbc-form-check {
+    position: relative;
+    display: block;
+}
+
+.dbc-form-group {
+    margin-bottom: 1rem;
+}
+
+.dbc-col-form-label {
+    padding-top: calc(0.375rem + 1px);
+    padding-bottom: calc(0.375rem + 1px);
+    margin-bottom: 0;
+    font-size: inherit;
+    line-height: 1.5;
+}
+
+.dbc-archive-anchor {
+    
+}
+
+.dbc-post-content img {
+    width: 100%;
+    height: 100%;
+}
+

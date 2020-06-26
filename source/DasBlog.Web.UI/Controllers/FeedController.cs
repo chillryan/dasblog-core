@@ -1,11 +1,14 @@
 ﻿using DasBlog.Managers.Interfaces;
-using DasBlog.Core.Services.Rss20;
-using DasBlog.Core.Services.Rsd;
-using Microsoft.AspNetCore.Http;
+using DasBlog.Services;
+using DasBlog.Services.ActivityLogs;
+using DasBlog.Services.Rss.Rss20;
+using DasBlog.Services.Rss.Rsd;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace DasBlog.Web.Controllers
 {
@@ -14,26 +17,31 @@ namespace DasBlog.Web.Controllers
         private IMemoryCache memoryCache;
         private readonly ISubscriptionManager subscriptionManager;
 		private readonly IXmlRpcManager xmlRpcManager;
+		private readonly IDasBlogSettings dasBlogSettings;
+		private readonly ILogger<FeedController> logger;
 
-        public FeedController(ISubscriptionManager subscriptionManager, IHttpContextAccessor httpContextAccessor,
-								IXmlRpcManager xmlRpcManager, IMemoryCache memoryCache)
+		public FeedController(ISubscriptionManager subscriptionManager, IXmlRpcManager xmlRpcManager, 
+								IMemoryCache memoryCache, IDasBlogSettings dasBlogSettings, ILogger<FeedController> logger)
         {  
             this.subscriptionManager = subscriptionManager;
 			this.xmlRpcManager = xmlRpcManager;
 			this.memoryCache = memoryCache;
-        }
+			this.dasBlogSettings = dasBlogSettings;
+			this.logger = logger;
+		}
 
 		[Produces("text/xml")]
         [HttpGet("feed/rss")]
         public IActionResult Rss()
         {
-
 			if (!memoryCache.TryGetValue(CACHEKEY_RSS, out RssRoot rss))
 			{
 				rss = subscriptionManager.GetRss();
 
 				memoryCache.Set(CACHEKEY_RSS, rss, SiteCacheSettings());
 			}
+
+			logger.LogInformation(new EventDataItem(EventCodes.RSS, null, "RSS request"));
 
 			return Ok(rss);
         }
@@ -49,6 +57,8 @@ namespace DasBlog.Web.Controllers
 
 				memoryCache.Set(CACHEKEY_RSS + "_" + category, rss, SiteCacheSettings());
 			}
+
+			logger.LogInformation(new EventDataItem(EventCodes.RSS, null, "RSS category request: '{0}'", category));
 
 			return Ok(rss);
         }
@@ -79,19 +89,46 @@ namespace DasBlog.Web.Controllers
 
 		[Produces("text/xml")]
 		[HttpPost("feed/blogger")]
-		public IActionResult BloggerPost()
+		public async Task<IActionResult> BloggerPost()
 		{
 			var blogger = string.Empty;
 
-			using (var mem = new MemoryStream())
+			try
 			{
-				Request.Body.CopyTo(mem);
-				blogger = xmlRpcManager.Invoke(mem);
+				using (var mem = new MemoryStream())
+				{
+					await Request.Body.CopyToAsync(mem);
+					blogger = xmlRpcManager.Invoke(mem);
+				}
 			}
+			catch (Exception ex)
+			{
+				logger.LogError(new EventDataItem(EventCodes.RSS, null, "FeedController.BloggerPost Error: {0}", ex.Message));
+			}
+
+			logger.LogInformation(new EventDataItem(EventCodes.RSS, null, "FeedController.BloggerPost successfully submitted"));
 
 			BreakSiteCache();
 
 			return Content(blogger);
+		}
+
+		[HttpGet("feed/pingback")]
+		public ActionResult PingBack()
+		{
+			return Ok();
+		}
+
+		[HttpGet("feed/rss/comments/{entryid}")]
+		public ActionResult RssComments(string entryid)
+		{
+			return Ok();
+		}
+
+		[HttpGet("feed/trackback/{entryid}")]
+		public ActionResult TrackBack(string entryid)
+		{
+			return Ok();
 		}
 
 		private void BreakSiteCache()

@@ -1,21 +1,22 @@
-﻿using DasBlog.Managers.Interfaces;
+﻿using System.IO;
+using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
 using newtelligence.DasBlog.Runtime;
-using DasBlog.Core;
 
 namespace DasBlog.Managers
 {
 	public class CategoryManager : ICategoryManager
     {
-        private IBlogDataService dataService;
-        private readonly ILoggingDataService loggingDataService;
+        private readonly IBlogDataService dataService;
         private readonly IDasBlogSettings dasBlogSettings;
 
         public CategoryManager(IDasBlogSettings settings)
         {
             dasBlogSettings = settings;
-            loggingDataService = LoggingDataServiceFactory.GetService(dasBlogSettings.WebRootDirectory + dasBlogSettings.SiteConfiguration.LogDir);
-            dataService = BlogDataServiceFactory.GetService(dasBlogSettings.WebRootDirectory + dasBlogSettings.SiteConfiguration.ContentDir, loggingDataService);
-        }
+
+			var loggingDataService = LoggingDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.LogDir)); ;
+			dataService = BlogDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.ContentDir), loggingDataService);
+		}
 
         public EntryCollection GetEntries()
         {
@@ -24,8 +25,14 @@ namespace DasBlog.Managers
 
         public EntryCollection GetEntries(string category, string acceptLanguages)
         {
-			category = category.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, " ");
+			category = category.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, "+");
             return dataService.GetEntriesForCategory(category, acceptLanguages);
         }
-    }
+
+		public string GetCategoryTitle(string categoryurl)
+		{
+			categoryurl = categoryurl.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, "+");
+			return dataService.GetCategoryTitle(categoryurl);
+		}
+	}
 }

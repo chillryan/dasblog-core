@@ -1,5 +1,6 @@
 ﻿using DasBlog.Core.Common.Comments;
 using DasBlog.Core.Configuration;
+using DasBlog.Services.ConfigFile.Interfaces;
 using newtelligence.DasBlog.Runtime;
 using System;
 using System.Collections.Generic;
@@ -18,6 +19,8 @@ namespace DasBlog.Tests.UnitTests
 		public string Root { get => "http://www.poppastring.com/"; set => throw new NotImplementedException(); }
 		public string Copyright { get => "CopyRight"; set => throw new NotImplementedException(); }
 		public int RssDayCount { get => 100; set => throw new NotImplementedException(); }
+		public bool ShowCommentCount { get => true; set => throw new NotImplementedException(); }
+
 		public int RssMainEntryCount { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public int RssEntryCount { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableRssItemFooters { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -41,7 +44,6 @@ namespace DasBlog.Tests.UnitTests
 		public bool EnableConfigEditService { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableEditService { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableAutoPingback { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-		public bool ShowCommentCount { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableTrackbackService { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnablePingbackService { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableStartPageCaching { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -123,8 +125,6 @@ namespace DasBlog.Tests.UnitTests
 		public string CommentsGravatarRating { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool CommentsRequireApproval { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool CommentsAllowHtml { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-		public ValidTagCollection XmlAllowedTagsArray { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-		public ValidTagCollection AllowedTags { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public string XmlAllowedTags { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableCoComment { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableSpamBlockingService { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -154,5 +154,6 @@ namespace DasBlog.Tests.UnitTests
 		public XmlElement[] anyElements { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public XmlAttribute[] anyAttributes { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool ShowItemSummaryInAggregatedViews { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		ValidCommentTags[] ISiteConfig.ValidCommentTags { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 	}
 }

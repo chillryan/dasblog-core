@@ -1,12 +1,16 @@
-﻿using AutoMapper;
-using DasBlog.Core;
-using DasBlog.Managers.Interfaces;
+﻿using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
+using DasBlog.Services.ActivityLogs;
 using DasBlog.Web.Models.BlogViewModels;
 using DasBlog.Web.Settings;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using newtelligence.DasBlog.Runtime;
+using System.Diagnostics;
 using System.Linq;
+using EventCodes = DasBlog.Services.ActivityLogs.EventCodes;
+using EventDataItem = DasBlog.Services.ActivityLogs.EventDataItem;
 
 namespace DasBlog.Web.Controllers
 {
@@ -15,34 +19,51 @@ namespace DasBlog.Web.Controllers
 		private readonly ICategoryManager categoryManager;
 		private readonly IHttpContextAccessor httpContextAccessor;
 		private readonly IDasBlogSettings dasBlogSettings;
-		private readonly IMapper mapper;
+		private readonly ILogger<CategoryController> logger;
 		private const string CATEGORY = "Category";
 
-		public CategoryController(ICategoryManager categoryManager, IDasBlogSettings settings, IHttpContextAccessor httpContextAccessor, IMapper mapper)
-			: base(settings)
+		public CategoryController(ICategoryManager categoryManager, IDasBlogSettings dasBlogSettings, IHttpContextAccessor httpContextAccessor,
+									ILogger<CategoryController> logger)
+			: base(dasBlogSettings)
 		{
 			this.categoryManager = categoryManager;
-			dasBlogSettings = settings;
+			this.dasBlogSettings = dasBlogSettings;
 			this.httpContextAccessor = httpContextAccessor;
-			this.mapper = mapper;
+			this.logger = logger;
 		}
 
 		[HttpGet("category")]
 		public IActionResult Category()
 		{
+			var stopWatch = new Stopwatch();
+			stopWatch.Start();
+
 			var viewModel = GetCategoryListFromCategoryManager(string.Empty);
+
+			stopWatch.Stop();
+			logger.LogInformation(new EventDataItem(EventCodes.Site, null, $"CategoryController.Category Time elapsed: {stopWatch.Elapsed.TotalMilliseconds}ms"));
+
 			return View(viewModel);
 		}
 
 		[HttpGet("category/{cat}")]
 		public IActionResult Category(string cat)
 		{
-			var viewModel = GetCategoryListFromCategoryManager(cat);
+			var stopWatch = new Stopwatch();
+			stopWatch.Start();
+
+			var viewModel = GetCategoryListFromCategoryManager(cat.ToLower());
+
+			stopWatch.Stop();
+			logger.LogInformation(new EventDataItem(EventCodes.Site, null, $"CategoryController.Category ({cat}) Time elapsed: {stopWatch.Elapsed.TotalMilliseconds}ms"));
+
 			return View(viewModel);
 		}
 
 		private CategoryListViewModel GetCategoryListFromCategoryManager(string category)
 		{
+			category = category.ToLower();
+
 			var entries = !string.IsNullOrEmpty(category)
 				? categoryManager.GetEntries(category, httpContextAccessor.HttpContext.Request.Headers["Accept-Language"])
 				: categoryManager.GetEntries();
@@ -53,7 +74,9 @@ namespace DasBlog.Web.Controllers
 				entryList.Add(entry);
 			}
 
-			var viewModel = CategoryListViewModel.Create(entryList, category);
+			var categoryTile = categoryManager.GetCategoryTitle(category);
+
+			var viewModel = CategoryListViewModel.Create(entryList, categoryTile);
 
 			DefaultPage(CATEGORY);
 			return viewModel;

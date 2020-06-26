@@ -13,30 +13,44 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Text;
 using System.Xml.Serialization;
+using DasBlog.Services.ConfigFile.Interfaces;
+using DasBlog.Services.ConfigFile;
+using DasBlog.Services;
+using System.Linq;
+using newtelligence.DasBlog.Runtime;
+using DasBlog.Services.FileManagement;
+using Microsoft.AspNetCore.Http;
 
 namespace DasBlog.Web.Settings
 {
 	public class DasBlogSettings : IDasBlogSettings
 	{
 		private readonly IFileProvider fileProvider;
+		private readonly string siteSecurityConfigFilePath;
+		private readonly ConfigFilePathsDataOption filePathDataOptions;
 
-		public DasBlogSettings(IHostingEnvironment env, IOptions<SiteConfig> siteConfig, IOptions<MetaTags> metaTagsConfig, ISiteSecurityConfig siteSecurityConfig, IFileProvider fileProvider)
+		public DasBlogSettings(IWebHostEnvironment env, IOptionsMonitor<SiteConfig> siteConfig, IOptionsMonitor<MetaTags> metaTagsConfig, ISiteSecurityConfig siteSecurityConfig, 
+								IFileProvider fileProvider, IOptions<ConfigFilePathsDataOption> optionsAccessor)
 		{
 			this.fileProvider = fileProvider;
 
-			WebRootDirectory = Startup.GetDataRoot(env);
-			SiteConfiguration = siteConfig.Value;
+			WebRootDirectory = env.ContentRootPath;
+			SiteConfiguration = siteConfig.CurrentValue;
+
 			SecurityConfiguration = siteSecurityConfig;
-			MetaTags = metaTagsConfig.Value;
+			MetaTags = metaTagsConfig.CurrentValue;
+			filePathDataOptions = optionsAccessor.Value;
 
 			RssUrl = RelativeToRoot("feed/rss");
 			PingBackUrl = RelativeToRoot("feed/pingback");
 			CategoryUrl = RelativeToRoot("category");
 			ArchiveUrl = RelativeToRoot("archive");
-			MicroSummaryUrl = RelativeToRoot("microsummary");
+			MicroSummaryUrl = RelativeToRoot("site/microsummary");
 			RsdUrl = RelativeToRoot("feed/rsd");
-			ShortCutIconUrl = RelativeToRoot("icon.jpg");
-			ThemeCssUrl = RelativeToRoot(string.Format("theme/{0}/custom.css",SiteConfiguration.Theme));
+			ShortCutIconUrl = RelativeToRoot(string.Format("theme/{0}/favicon.ico", SiteConfiguration.Theme));
+			ThemeCssUrl = RelativeToRoot(string.Format("theme/{0}/custom.css", SiteConfiguration.Theme));
+
+			siteSecurityConfigFilePath = filePathDataOptions.SecurityConfigFilePath;
 		}
 
 		public string WebRootDirectory { get; }
@@ -57,9 +71,9 @@ namespace DasBlog.Web.Settings
 
 		public string ThemeCssUrl { get; }
 		
-		public IMetaTags MetaTags { get; }
+		public IMetaTags MetaTags { get; set; }
 
-		public ISiteConfig SiteConfiguration { get; }
+		public ISiteConfig SiteConfiguration { get; set;  }
 
 		public ISiteSecurityConfig SecurityConfiguration { get; }
 
@@ -120,7 +134,7 @@ namespace DasBlog.Web.Settings
 		}
 		public string GetCommentViewUrl(string entryId)
         {
-            return GetPermaLinkUrl(entryId) + $"/comments#{Constants.CommentsStartId}";
+            return RelativeToRoot(entryId) + $"/comments#{Constants.CommentsStartId}";
         }
 
         public string GetTrackbackUrl(string entryId)
@@ -164,8 +178,8 @@ namespace DasBlog.Web.Settings
 		{
 			SecurityConfiguration.Users.Add(user);
 			var ser = new XmlSerializer(typeof(SiteSecurityConfig));
-			var fileInfo = fileProvider.GetFileInfo(Startup.SITESECURITYCONFIG);
-			using (var writer = new StreamWriter(fileInfo.PhysicalPath))
+
+			using (var writer = new StreamWriter(siteSecurityConfigFilePath))
 			{
 				ser.Serialize(writer, SecurityConfiguration);
 			}
@@ -207,13 +221,13 @@ namespace DasBlog.Web.Settings
 
 		public string FilterHtml(string input)
 		{
-			if (SiteConfiguration.AllowedTags == null || SiteConfiguration.AllowedTags.Count == 0)
+			if (SiteConfiguration.ValidCommentTags == null || SiteConfiguration.ValidCommentTags[0].Tag.Count(s => s.Allowed == true) == 0)
 			{
 				return WebUtility.HtmlEncode(input);
 			}
 
 			// check for matches
-			MatchCollection matches = htmlFilterRegex.Matches(input);
+			var matches = htmlFilterRegex.Matches(input);
 
 			// no matches, normal encoding
 			if (matches.Count == 0)
@@ -221,17 +235,16 @@ namespace DasBlog.Web.Settings
 				return WebUtility.HtmlEncode(input);
 			}
 
-			StringBuilder sb = new StringBuilder();
+			var sb = new StringBuilder();
 
 
-			MatchedTagCollection collection = new MatchedTagCollection(SiteConfiguration.AllowedTags);
+			var collection = new MatchedTagCollection(SiteConfiguration.ValidCommentTags);
 			collection.Init(matches);
 
 			int inputIndex = 0;
 
 			foreach (MatchedTag tag in collection)
 			{
-
 				// add the normal text between the current index and the index of the current tag
 				if (inputIndex < tag.Index)
 				{
@@ -274,14 +287,9 @@ namespace DasBlog.Web.Settings
 			return RelativeToRoot("feed/rsd", root);
 		}
 
-		/// <summary>
-		/// parent directory for Config, content and logs
-		/// </summary>
-		/// <param name="env">this is a nuissance</param>
-		/// <returns>e.g. C:\alt\projects\dasblog-core\source/DasBlog.Web.UI</returns>
-		public static string GetWebHostingDirectory(IHostingEnvironment env)
+		public string CompressTitle(string title)
 		{
-			return Startup.GetDataRoot(env);
+			return Entry.InternalCompressTitle(title, SiteConfiguration.TitlePermalinkSpaceReplacement).ToLower();
 		}
 	}
 }

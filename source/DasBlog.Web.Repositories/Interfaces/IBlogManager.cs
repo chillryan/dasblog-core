@@ -1,13 +1,14 @@
 ﻿using System;
+using System.Threading.Tasks;
 using newtelligence.DasBlog.Runtime;
 
 namespace DasBlog.Managers.Interfaces
 {
     public interface IBlogManager
     {
-        Entry GetBlogPost(string postid, DateTime? postDate);
+        Entry GetBlogPost(string posttitle, DateTime? postDate);
 
-		Entry GetBlogPost(Guid postid);
+		Entry GetBlogPostByGuid(Guid postid);
 
 		Entry GetEntryForEdit(string postid);
 
@@ -33,5 +34,6 @@ namespace DasBlog.Managers.Interfaces
 
 	    EntryCollection SearchEntries(string searchString, string acceptLanguageHeader);
 
-    }
+		bool SendTestEmail();
+	}
 }

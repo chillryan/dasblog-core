@@ -1,34 +1,55 @@
-﻿using System;
-using System.IO;
-using DasBlog.Core;
-using DasBlog.Managers.Interfaces;
+﻿using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
+using DasBlog.Services.ConfigFile;
+using DasBlog.Services.ConfigFile.Interfaces;
+using DasBlog.Services.FileManagement;
+using DasBlog.Services.FileManagement.Interfaces;
+using Microsoft.Extensions.Options;
 using newtelligence.DasBlog.Runtime;
+using System;
+using System.IO;
 
 namespace DasBlog.Managers
 {
 	public class FileSystemBinaryManager : IFileSystemBinaryManager
 	{
-		private readonly IBinaryDataService dataService;
-		private readonly string virtBinaryPathRelativeToContentRoot;
-		public FileSystemBinaryManager(IDasBlogSettings settings)
+		private readonly IBinaryDataService binaryDataService;
+		private readonly IDasBlogSettings dasBlogSettings;
+		private readonly IConfigFileService<MetaTags> metaTagFileService;
+		private readonly IConfigFileService<SiteConfig> siteConfigFileService;
+		private readonly ConfigFilePathsDataOption options;
+		private readonly string contentBinaryUrl;
+
+		public FileSystemBinaryManager(IDasBlogSettings dasBlogSettings, IConfigFileService<MetaTags> metaTagFileService, 
+										IConfigFileService<SiteConfig> siteConfigFileService, IOptions<ConfigFilePathsDataOption> optionsAccessor)
 		{
-			var siteConfig = settings.SiteConfiguration;
-			virtBinaryPathRelativeToContentRoot = siteConfig.BinariesDir.TrimStart('~'); // => "/content/binary"
-			string physBinaryPath = Path.Combine(settings.WebRootDirectory,virtBinaryPathRelativeToContentRoot.TrimStart('/'));  // => "c:\...\DaBlog.Web.UI\content/binary"
-					// WebRootDirectory is a misnomer.  It should be called ContentRootDirectory
-					// ContentRootDirectory is not "c:\...\DasBlog.Web.UI\contnet".  It is actually "c:\...\DasBlog.Web.UI"
-					// WebRootDirectory is "wwwroot".
-			Uri physBinaryPathUrl = new Uri(physBinaryPath);
-			var loggingDataService = LoggingDataServiceFactory.GetService(settings.WebRootDirectory + settings.SiteConfiguration.LogDir);
-			dataService = BinaryDataServiceFactory.GetService(physBinaryPath, physBinaryPathUrl ,loggingDataService);
+			this.dasBlogSettings = dasBlogSettings;
+			this.metaTagFileService = metaTagFileService;
+			this.siteConfigFileService = siteConfigFileService;
+			options = optionsAccessor.Value;
+			contentBinaryUrl = dasBlogSettings.RelativeToRoot(options.BinaryUrlRelative);
+
+			var physBinaryPathUrl = new Uri(contentBinaryUrl);
+
+			var loggingDataService = LoggingDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.LogDir));
+
+			this.binaryDataService = BinaryDataServiceFactory.GetService(options.BinaryFolder, physBinaryPathUrl, loggingDataService);
 		}
 
 		public string SaveFile(Stream inputFile, string fileName)
 		{
-			dataService.SaveFile(inputFile, ref fileName);
-			string newPathAndFileName = fileName;			// "c:\...\DasBlog.Web.UI\content/bianry/my-image.jpg"
-			string newFileName = Path.GetFileName(newPathAndFileName);		// might be same as original or maybe different
-			return Path.Combine(virtBinaryPathRelativeToContentRoot, newFileName);  // s/be "/Content/binary/mypic-etc.jpg"
+			return binaryDataService.SaveFile(inputFile, ref fileName);
+		}
+
+		public bool SaveMetaConfig(MetaTags config)
+		{
+			return metaTagFileService.SaveConfig(config);
+		}
+
+		public bool SaveSiteConfig(SiteConfig config)
+		{
+			config.ValidCommentTags[0].Name = "0";
+			return siteConfigFileService.SaveConfig(config);
 		}
 	}
 }
