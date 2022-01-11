@@ -9,7 +9,7 @@ namespace DasBlog.Web.Models.BlogViewModels
 	public class PostViewModel
 	{
 		[Required]
-		[StringLength(60, MinimumLength = 1)]
+		[MinLength(1)]
 		public string Title { get; set; }
 
 		[DataType(DataType.MultilineText)]
@@ -55,6 +55,12 @@ namespace DasBlog.Web.Models.BlogViewModels
 
 		public string ImageUrl { get; set; } = string.Empty;
 
+		public string VideoUrl { get; set; } = string.Empty;
+
 		public int Order { get; set; } = 0;
+
+
+        public List<string> ErrorMessages { get; set; }
+    
 	}
 }

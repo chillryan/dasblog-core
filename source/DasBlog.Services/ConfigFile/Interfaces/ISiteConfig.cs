@@ -98,6 +98,7 @@ namespace DasBlog.Services.ConfigFile.Interfaces
         bool SendPingbacksByEmail { get; set; }
 
         bool SendPostsByEmail { get; set; }
+        bool EnableAboutView { get; set; }
 
         bool EnableBloggerApi { get; set; }
 
@@ -206,6 +207,12 @@ namespace DasBlog.Services.ConfigFile.Interfaces
 
         bool EnableCaptcha { get; set; }
 
+        string RecaptchaSiteKey { get; set; }
+
+        string RecaptchaSecretKey { get; set; } 
+
+        double RecaptchaMinimumScore { get; set; }
+
         bool EnableReferralUrlBlackList404s { get; set; }
 
         bool EnableMovableTypeBlackList { get; set; }
@@ -229,6 +236,7 @@ namespace DasBlog.Services.ConfigFile.Interfaces
         bool EnableSmtpAuthentication { get; set; }
 
         string SmtpUserName { get; set; }
+        string SmtpFromEmail { get; set; }
 
         string SmtpPassword { get; set; }
 
@@ -333,7 +341,17 @@ namespace DasBlog.Services.ConfigFile.Interfaces
 
         string CheesySpamA { get; set; }
 
-        [XmlAnyElement]
+		bool UseAspxExtension { get; set; }
+
+		string SecurityScriptSources { get; set; }
+
+		string SecurityStyleSources { get; set; }
+
+		string DefaultSources { get; set; }
+
+		bool CookieConsentEnabled { get; set; }
+
+		[XmlAnyElement]
         XmlElement[] anyElements { get; set; }
 
         [XmlAnyAttribute]

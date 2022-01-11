@@ -13,10 +13,19 @@ namespace DasBlog.Web.TagHelpers.Comments
 
 		public override void Process(TagHelperContext context, TagHelperOutput output)
 		{
-			output.TagName = "a";
 			output.TagMode = TagMode.StartTagAndEndTag;
-			output.Attributes.SetAttribute("href", Comment.HomePageUrl);
-			output.Attributes.SetAttribute("rel", "nofollow");
+
+			if (Comment.HomePageUrl?.Length > 0)
+			{
+				output.TagName = "a";
+				output.Attributes.SetAttribute("href", Comment.HomePageUrl);
+				output.Attributes.SetAttribute("rel", "nofollow");
+			}
+			else 
+			{
+				output.TagName = "span";
+			}
+			
 			output.Attributes.SetAttribute("class", "dbc-comment-user-homepage-name");
 			output.Content.SetHtmlContent(Comment.Name);
 		}

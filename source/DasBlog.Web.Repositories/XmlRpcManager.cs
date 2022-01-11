@@ -192,7 +192,7 @@ namespace DasBlog.Managers
 			VerifyAccess(username, password);
 
 			var entries = dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), dasBlogSettings.GetConfiguredTimeZone(), null,
-				dasBlogSettings.SiteConfiguration.RssDayCount, numberOfPosts, null);
+														numberOfPosts, numberOfPosts, null);
 			var arrayList = new List<MoveableType.PostTitle>();
 			foreach (Entry entry in entries)
 			{
@@ -419,7 +419,7 @@ namespace DasBlog.Managers
 			VerifyAccess(username, password);
 
 			var entries = dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), dasBlogSettings.GetConfiguredTimeZone(),
-											null, dasBlogSettings.SiteConfiguration.RssDayCount, numberOfPosts, null);
+											null, numberOfPosts, numberOfPosts, null);
 			var arrayList = new List<Blogger.Post>();
 			foreach (Entry entry in entries)
 			{
@@ -476,6 +476,8 @@ namespace DasBlog.Managers
 			FillEntryFromBloggerPost(newPost, content, username);
 			newPost.IsPublic = publish;
 			newPost.Syndicated = publish;
+
+			newPost.CreatedUtc = newPost.ModifiedUtc = dasBlogSettings.GetCreateTime(newPost.CreatedUtc);
 
 			dataService.SaveEntry(newPost);
 
@@ -595,7 +597,7 @@ namespace DasBlog.Managers
 			VerifyAccess(username, password);
 
 			var entries = dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), dasBlogSettings.GetConfiguredTimeZone(), null,
-														dasBlogSettings.SiteConfiguration.RssDayCount, numberOfPosts, null);
+														numberOfPosts, numberOfPosts, null);
 			var arrayList = new List<MetaWeblog.Post>();
 			foreach (Entry entry in entries)
 			{
@@ -613,6 +615,8 @@ namespace DasBlog.Managers
 			newPost.Author = username;
 
 			var trackbackList = FillEntryFromMetaWeblogPost(newPost, post);
+
+			newPost.CreatedUtc = newPost.ModifiedUtc = dasBlogSettings.GetCreateTime(newPost.CreatedUtc);
 
 			newPost.IsPublic = publish;
 			newPost.Syndicated = publish;

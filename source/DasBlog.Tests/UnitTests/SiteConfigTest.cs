@@ -38,6 +38,7 @@ namespace DasBlog.Tests.UnitTests
 		public bool SendTrackbacksByEmail { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool SendPingbacksByEmail { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool SendPostsByEmail { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		public bool EnableAboutView { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableBloggerApi { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableComments { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableCommentApi { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -89,6 +90,9 @@ namespace DasBlog.Tests.UnitTests
 		public string ReferralUrlBlackList { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public string[] ReferralUrlBlackListArray { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableCaptcha { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public string RecaptchaSiteKey { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public string RecaptchaSecretKey { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public double RecaptchaMinimumScore { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableReferralUrlBlackList404s { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableMovableTypeBlackList { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public string ChannelImageUrl { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -102,6 +106,7 @@ namespace DasBlog.Tests.UnitTests
 		public bool EnableSmtpAuthentication { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public string SmtpUserName { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public string SmtpPassword { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		public string SmtpFromEmail { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public string RssLanguage { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableSearchHighlight { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool EnableEntryReferrals { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -154,6 +159,13 @@ namespace DasBlog.Tests.UnitTests
 		public XmlElement[] anyElements { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public XmlAttribute[] anyAttributes { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		public bool ShowItemSummaryInAggregatedViews { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		public bool UseAspxExtension { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		public bool CookieConsentEnabled { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 		ValidCommentTags[] ISiteConfig.ValidCommentTags { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+		public string SecurityScriptSources { get; set; }
+
+		public string SecurityStyleSources { get; set; }
+		public string DefaultSources { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 	}
 }

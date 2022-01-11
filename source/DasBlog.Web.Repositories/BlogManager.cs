@@ -29,6 +29,7 @@ namespace DasBlog.Managers
 		private readonly ILogger logger;
 		private static readonly Regex stripTags = new Regex("<[^>]*>", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 		private readonly IDasBlogSettings dasBlogSettings;
+		private const int COMMENT_PAGE_SIZE = 5;
 
 		public BlogManager( ILogger<BlogManager> logger, IDasBlogSettings dasBlogSettings)
 		{
@@ -42,18 +43,19 @@ namespace DasBlog.Managers
 		/// <param name="dt">if non-null then the post must be dated on that date</param>
 		public Entry GetBlogPost(string posttitle, DateTime? dt)
 		{
-			posttitle = posttitle.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement,string.Empty);
-
 			if (dt == null)
 			{
+				posttitle = posttitle.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, string.Empty)
+									.Replace(".aspx", string.Empty);
+
 				return dataService.GetEntry(posttitle);
 			}
 			else
 			{
 				var entries = dataService.GetEntriesForDay(dt.Value, null, null, 1, 10, null);
 
-				return entries.FirstOrDefault(e => dasBlogSettings.GetPermaTitle(e.CompressedTitle)
-				  .Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, string.Empty) == posttitle);
+				return entries.FirstOrDefault(e => dasBlogSettings.GeneratePostUrl(e)
+											.EndsWith(posttitle, StringComparison.OrdinalIgnoreCase));
 			}
 		}
 
@@ -71,7 +73,8 @@ namespace DasBlog.Managers
 		{			
 			return dataService.GetEntriesForDay(dasBlogSettings.GetContentLookAhead(), dasBlogSettings.GetConfiguredTimeZone(), 
 											acceptLanguageHeader, dasBlogSettings.SiteConfiguration.FrontPageEntryCount, 
-											dasBlogSettings.SiteConfiguration.FrontPageEntryCount, string.Empty);
+											dasBlogSettings.SiteConfiguration.FrontPageEntryCount, 
+											dasBlogSettings.SiteConfiguration.FrontPageCategory);
 		}
 
 		public EntryCollection GetEntriesForPage(int pageIndex, string acceptLanguageHeader)
@@ -350,21 +353,25 @@ namespace DasBlog.Managers
 		public CommentSaveState AddComment(string postid, Comment comment)
 		{
 			var saveState = CommentSaveState.Failed;
+			var entry = dataService.GetEntry(postid);
 
-			if (!dasBlogSettings.SiteConfiguration.EnableComments)
+			if (!dasBlogSettings.SiteConfiguration.EnableComments || !entry.AllowComments)
 			{
 				return CommentSaveState.SiteCommentsDisabled;
 			}
 
-			var entry = dataService.GetEntry(postid);
 			if (entry != null)
 			{
 				var targetComment = DateTime.UtcNow.AddDays(-1 * dasBlogSettings.SiteConfiguration.DaysCommentsAllowed);
 
-				if (targetComment > entry.CreatedUtc)
+				if ((targetComment > entry.CreatedUtc))
 				{
 					return CommentSaveState.PostCommentsDisabled;
 				}
+
+				// FilterHtml html encodes anything we don't like
+				string filteredText = dasBlogSettings.FilterHtml(comment.Content);
+				comment.Content = filteredText;
 
 				if (dasBlogSettings.SiteConfiguration.SendCommentsByEmail)
 				{
@@ -431,15 +438,43 @@ namespace DasBlog.Managers
 			return dataService.GetCommentsFor(postid, allComments);
 		}
 
+		public CommentCollection GetAllComments()
+		{
+			return dataService.GetAllComments();
+		}
+
+		public List<Comment> GetCommentsFrontPage()
+		{
+			var comments = dataService.GetAllComments().OrderByDescending(d => d.CreatedUtc).ToList();
+
+			return comments.Take(COMMENT_PAGE_SIZE).ToList();
+		}
+
+		public List<Comment> GetCommentsForPage(int pageIndex)
+		{
+			var comments = dataService.GetAllComments().OrderByDescending(d => d.CreatedUtc).ToList();
+
+			return comments.Skip((pageIndex) * COMMENT_PAGE_SIZE).Take(COMMENT_PAGE_SIZE).ToList();
+		}
+
 		public CategoryCacheEntryCollection GetCategories()
 		{
 			return dataService.GetCategories();
 		}
 
+		private string GetFromEmail()
+		{
+			if (string.IsNullOrWhiteSpace(dasBlogSettings.SiteConfiguration.SmtpFromEmail))
+			{
+				return dasBlogSettings.SiteConfiguration.SmtpUserName;
+			}
+
+			return dasBlogSettings.SiteConfiguration.SmtpFromEmail.Trim();
+		}
 		public bool SendTestEmail()
 		{
 			var emailMessage = new MailMessage();
-			emailMessage.From = new MailAddress(dasBlogSettings.SiteConfiguration.SmtpUserName);
+			emailMessage.From = new MailAddress(GetFromEmail());
 			emailMessage.To.Add(dasBlogSettings.SiteConfiguration.NotificationEMailAddress);
 			emailMessage.To.Add(dasBlogSettings.SiteConfiguration.Contact);
 
@@ -454,7 +489,7 @@ namespace DasBlog.Managers
 			emailMessage.Subject = string.Format("SMTP email from {0}", dasBlogSettings.SiteConfiguration.Title);
 			emailMessage.Body = "Test ";
 
-			var sendMailInfo = GetMailInfo(emailMessage);
+			var sendMailInfo = dasBlogSettings.GetMailInfo(emailMessage);
 
 			try
 			{
@@ -528,17 +563,9 @@ namespace DasBlog.Managers
 			emailMessage.IsBodyHtml = false;
 			emailMessage.BodyEncoding = System.Text.Encoding.UTF8;
 
-			emailMessage.From = new MailAddress(dasBlogSettings.SiteConfiguration.SmtpUserName);
+			emailMessage.From = new MailAddress(GetFromEmail());
 
-			return GetMailInfo(emailMessage);
-		}
-
-		private SendMailInfo GetMailInfo(MailMessage emailmessage)
-		{
-			return new SendMailInfo(emailmessage, dasBlogSettings.SiteConfiguration.SmtpServer,
-						   dasBlogSettings.SiteConfiguration.EnableSmtpAuthentication, dasBlogSettings.SiteConfiguration.UseSSLForSMTP,
-						   dasBlogSettings.SiteConfiguration.SmtpUserName, dasBlogSettings.SiteConfiguration.SmtpPassword,
-						   dasBlogSettings.SiteConfiguration.SmtpPort);
+			return dasBlogSettings.GetMailInfo(emailMessage);
 		}
 	}
 }

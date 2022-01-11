@@ -51,7 +51,7 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[DisplayName("Front page day count")]
 		[Description("The maximum number of days to appear on your home page")]
 		[Required(AllowEmptyStrings = false, ErrorMessage = "Please enter a Front Page Day Count")]
-		[Range(1, 100, ErrorMessage = "Enter a value between  1 and 100")]
+		[Range(1, 1000, ErrorMessage = "Enter a value between  1 and 1000")]
 		public int FrontPageDayCount { get; set; }
 
 		[DisplayName("Front page entry count")]
@@ -80,14 +80,18 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[Range(0, 100, ErrorMessage = "Enter a value between  0 and 100")]
 		public int ContentLookaheadDays { get; set; }
 
-		[DisplayName("Show 'Item Summary' in Aggregated Views")]
+		[DisplayName("Show 'Summary View' on home page")]
 		[Description("This allows you to design a summary view for each blog post on the home page")]
 		public bool ShowItemSummaryInAggregatedViews { get; set; }
+
+		[DisplayName("Enable the About page ")]
+		[Description("This enables the Home/About view and allows you to customize this in the site theme.")]
+		public bool EnableAboutView { get; set; }
 
 		[DisplayName("RSS day count")]
 		[Description("Maximum number of days to appear in your RSS feed")]
 		[Required(AllowEmptyStrings = false, ErrorMessage = "Enter a value for RSS Day Count")]
-		[Range(1, 500, ErrorMessage = "Enter a value between  1 and 500")]
+		[Range(1, 1000, ErrorMessage = "Enter a value between  1 and 1000")]
 		public int RssDayCount { get; set; }
 
 		[DisplayName("RSS main entry count")]
@@ -141,8 +145,36 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[DisplayName("Spam prevention answer")]
 		[Description("Cheesy Spam Answer - Defines an answer that the commenters need to respond with in order to submit a comment (only enabled when CheesySpamQ has a val")]
 		[StringLength(300, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 300 characters")]
-
 		public string CheesySpamA { get; set; }
+
+		[DisplayName("Enable Captcha")]
+		[Description("Let's You Decide if you want to use Google's reCAPTCHA to prevent Bots from spamming the comments on your posts.")]
+        public bool EnableCaptcha { get; set; }
+
+       	[DisplayName("reCAPTCHA Minimum Score")]
+		[Description("Minimum Score for the reCAPTCHA to be considered pass. For example if you are asked to identify an image at least 50% of the images must be identified if score if 0.5")]
+		[Range(0.0, 1.0, ErrorMessage = "Values should be between 0 and 1")]
+        public double RecaptchaMinimumScore { get; set; }
+        
+       	[DisplayName("reCAPTCHA Site Key")]
+		[Description("reCAPTCHA site key based from Google reCAPTCHA Admin Site.")]
+		[StringLength(300, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 300 characters")]
+        public string RecaptchaSiteKey { get; set; }
+        
+       	[DisplayName("Google reCAPTCHA Secret Key")]
+		[Description("reCAPTCHA secret key based on Google reCAPTCHA Admin Site.")]
+		[StringLength(300, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 300 characters")]
+        public string RecaptchaSecretKey { get; set; }
+
+		[DisplayName("Style Sources (seperate by semi colon)")]
+		[Description("")]
+		[StringLength(600, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 600 characters")]
+		public string SecurityStyleSources { get; set; }
+
+		[DisplayName("Script Sources (seperate by semi colon)")]
+		[Description("")]
+		[StringLength(600, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 600 characters")]
+		public string SecurityScriptSources { get; set; }
 
 
 		[DisplayName("Enable unique URls")]
@@ -220,7 +252,10 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[DisplayName("SMTP user name")]
 		[Description("")]
 		public string SmtpUserName { get; set; }
-
+		
+		[DisplayName("From email, user name when blank")]
+		[Description("The from email address used for sending an email.  If this is blank, the SMTP User Name will be used.")]
+		public string SmtpFromEmail { get; set; }
 		[DisplayName("SMTP password")]
 		[Description("")]
 		[DataType(DataType.Password)]
@@ -242,6 +277,18 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[Description("")]
 		public bool ShowCommentCount { get; set; }
 
+		[DisplayName("Use ASPX extensions (will not 301 redirect)")]
+		[Description("")]
+		public bool UseAspxExtension { get; set; }
+
+		[DisplayName("Cookie Consent (GDPR Support)")]
+		[Description("Help meet some of the EU General Data Protection Regulation (GDPR) requirements")]
+		public bool CookieConsentEnabled { get; set; }
+
+		[DisplayName("Default Sources (seperated by semi colon")]
+		[Description("")]
+		[StringLength(50, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 50 characters")]
+		public string DefaultSources { get; set; }
 
 		public bool EntryTitleAsLink { get; set; }
 		public bool ObfuscateEmail { get; set; }
@@ -285,8 +332,7 @@ namespace DasBlog.Web.Models.AdminViewModels
 		public bool EnableReferralUrlBlackList { get; set; }
 		public string ReferralUrlBlackList { get; set; }
 		public string[] ReferralUrlBlackListArray { get; set; }
-		public bool EnableCaptcha { get; set; }
-		public bool EnableReferralUrlBlackList404s { get; set; }
+        public bool EnableReferralUrlBlackList404s { get; set; }
 		public bool EnableMovableTypeBlackList { get; set; }
 		public bool EnableCrossPostFooter { get; set; }
 		public string CrossPostFooter { get; set; }

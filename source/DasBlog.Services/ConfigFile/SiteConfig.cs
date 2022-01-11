@@ -79,6 +79,7 @@ namespace DasBlog.Services.ConfigFile
         public bool SendTrackbacksByEmail { get; set; }
         public bool SendPingbacksByEmail { get; set; }
         public bool SendPostsByEmail { get; set; }
+        public bool EnableAboutView { get; set; }
         public bool EnableBloggerApi { get; set; }
         public bool EnableComments { get; set; }
         public bool EnableCommentApi { get; set; }
@@ -130,6 +131,9 @@ namespace DasBlog.Services.ConfigFile
         public string ReferralUrlBlackList { get; set; }
         public string[] ReferralUrlBlackListArray { get; set; }
         public bool EnableCaptcha { get; set; }
+        public string RecaptchaSiteKey { get; set; }
+        public string RecaptchaSecretKey { get; set; } 
+        public double RecaptchaMinimumScore {get; set; }
         public bool EnableReferralUrlBlackList404s { get; set; }
         public bool EnableMovableTypeBlackList { get; set; }
         public string ChannelImageUrl { get; set; }
@@ -142,6 +146,7 @@ namespace DasBlog.Services.ConfigFile
         public bool EncryptLoginPassword { get; set; }
         public bool EnableSmtpAuthentication { get; set; }
         public string SmtpUserName { get; set; }
+        public string SmtpFromEmail { get; set; }
         public string SmtpPassword { get; set; }
         public string RssLanguage { get; set; }
         public bool EnableSearchHighlight { get; set; }
@@ -204,5 +209,14 @@ namespace DasBlog.Services.ConfigFile
 
 		[XmlElement]
 		public ValidCommentTags [] ValidCommentTags { get; set; }
+
+		public bool UseAspxExtension { get; set; }
+		public bool CookieConsentEnabled { get; set; }
+
+		public string SecurityScriptSources { get; set; }
+
+		public string SecurityStyleSources { get; set; }
+
+		public string DefaultSources { get; set; }
 	}
 }

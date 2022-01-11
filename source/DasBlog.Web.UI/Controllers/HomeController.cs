@@ -102,19 +102,11 @@ namespace DasBlog.Web.Controllers
 
 		public IActionResult About()
 		{
-			DefaultPage();
-
-			ViewData["Message"] = "Your application description page.";
-
-			return NoContent();
-		}
-
-		public IActionResult Contact()
-		{
-			DefaultPage();
-
-			ViewData["Message"] = "Your contact page.";
-
+			if (dasBlogSettings.SiteConfiguration.EnableAboutView)
+			{
+				DefaultPage("About");
+				return View();
+			}
 			return NoContent();
 		}
 
@@ -148,7 +140,8 @@ namespace DasBlog.Web.Controllers
 									.Select(comment => mapper.Map<CommentViewModel>(comment)).ToList(),
 					PostId = post.EntryId,
 					PostDate = post.CreatedDateTime,
-					CommentUrl = dasBlogSettings.GetCommentViewUrl(post.PermaLink)
+					CommentUrl = dasBlogSettings.GetCommentViewUrl(post.PermaLink),
+					AllowComments = post.AllowComments
 				};
 				post.Comments = lcvm;
 			}
