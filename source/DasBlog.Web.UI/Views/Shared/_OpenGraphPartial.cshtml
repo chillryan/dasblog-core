@@ -1,7 +1,6 @@
-﻿@model OpenGraphViewModel
-
-<meta name="og:url" content="@Model.Url" />
-<meta name="og:title" content="@Model.Title" />
-<meta name="og:image" content="@Model.Image" />
-<meta name="og:description" content="@Model.Description" />
-<meta name="og:type" content="blog" />
+﻿<meta property="og:url" content="@ViewData["Canonical"]" />
+<meta property="og:title" content="@ViewData["PageTitle"]" />
+<meta property="og:image" content="@ViewData["PageImageUrl"]" />
+<meta property="og:description" content="@ViewData["Description"]" />
+<meta property="og:video" content="@ViewData["PageVideoUrl"]" />
+<meta property="og:type" content="article" />

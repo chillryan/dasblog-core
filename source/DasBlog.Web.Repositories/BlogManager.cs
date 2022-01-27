@@ -1,121 +1,265 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using newtelligence.DasBlog.Runtime;
+﻿using DasBlog.Core.Exceptions;
 using DasBlog.Managers.Interfaces;
-using DasBlog.Core;
-using newtelligence.DasBlog.Util;
-using Blogger = DasBlog.Core.XmlRpc.Blogger;
-using MoveableType = DasBlog.Core.XmlRpc.MoveableType;
-using MetaWeblog = DasBlog.Core.XmlRpc.MetaWeblog;
+using DasBlog.Services.ActivityLogs;
+using EventDataItem = DasBlog.Services.ActivityLogs.EventDataItem;
+using EventCodes = DasBlog.Services.ActivityLogs.EventCodes;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using newtelligence.DasBlog.Runtime;
+using NodaTime;
+using System;
+using System.Collections.Specialized;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Linq;
+using DasBlog.Services;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 using DasBlog.Core.Security;
-using DasBlog.Core.Exceptions;
-using System.Security;
+using System.Net.Mail;
+using System.Net;
 using System.IO;
-using CookComputing.XmlRpc;
-using System.Reflection;
-using System.Xml.Serialization;
-using newtelligence.DasBlog.Web.Services.Rss20;
 
 namespace DasBlog.Managers
 {
-    public class BlogManager : IBlogManager
-    {
-        private IBlogDataService _dataService;
-        private ILoggingDataService _loggingDataService;
-        private ISiteSecurityManager _siteSecurity;
-        private readonly IDasBlogSettings _dasBlogSettings;
+	public class BlogManager : IBlogManager
+	{
+		private readonly IBlogDataService dataService;
+		private readonly ILogger logger;
+		private static readonly Regex stripTags = new Regex("<[^>]*>", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+		private readonly IDasBlogSettings dasBlogSettings;
+		private const int COMMENT_PAGE_SIZE = 5;
 
-        public BlogManager(IDasBlogSettings settings)
-        {
-            _dasBlogSettings = settings;
-            _loggingDataService = LoggingDataServiceFactory.GetService(_dasBlogSettings.WebRootDirectory + _dasBlogSettings.SiteConfiguration.LogDir);
-            _dataService = BlogDataServiceFactory.GetService(_dasBlogSettings.WebRootDirectory + _dasBlogSettings.SiteConfiguration.ContentDir, _loggingDataService);
-        }
+		public BlogManager( ILogger<BlogManager> logger, IDasBlogSettings dasBlogSettings)
+		{
+			this.dasBlogSettings = dasBlogSettings;
+			this.logger = logger;
 
-        public Entry GetBlogPost(string postid)
-        {
-            return _dataService.GetEntry(postid);
-        }
+			var loggingDataService = LoggingDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.LogDir));;
+			dataService = BlogDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.ContentDir), loggingDataService);
+		}
+
+		/// <param name="dt">if non-null then the post must be dated on that date</param>
+		public Entry GetBlogPost(string posttitle, DateTime? dt)
+		{
+			if (dt == null)
+			{
+				posttitle = posttitle.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, string.Empty)
+									.Replace(".aspx", string.Empty);
+
+				return dataService.GetEntry(posttitle);
+			}
+			else
+			{
+				var entries = dataService.GetEntriesForDay(dt.Value, null, null, 1, 10, null);
+
+				return entries.FirstOrDefault(e => dasBlogSettings.GeneratePostUrl(e)
+											.EndsWith(posttitle, StringComparison.OrdinalIgnoreCase));
+			}
+		}
+
+		public Entry GetBlogPostByGuid(Guid postid)
+		{
+			return dataService.GetEntry(postid.ToString());
+		}
 
 		public Entry GetEntryForEdit(string postid)
 		{
-			return _dataService.GetEntryForEdit(postid);
+			return dataService.GetEntryForEdit(postid);
 		}
 
-		public EntryCollection GetFrontPagePosts()
-        {
-            DateTime fpDayUtc;
-            TimeZone tz;
+		public EntryCollection GetFrontPagePosts(string acceptLanguageHeader)
+		{			
+			return dataService.GetEntriesForDay(dasBlogSettings.GetContentLookAhead(), dasBlogSettings.GetConfiguredTimeZone(), 
+											acceptLanguageHeader, dasBlogSettings.SiteConfiguration.FrontPageEntryCount, 
+											dasBlogSettings.SiteConfiguration.FrontPageEntryCount, 
+											dasBlogSettings.SiteConfiguration.FrontPageCategory);
+		}
 
-            //Need to insert the Request.Headers["Accept-Language"];
-            string languageFilter = "en-US"; // Request.Headers["Accept-Language"];
-            fpDayUtc = DateTime.UtcNow.AddDays(_dasBlogSettings.SiteConfiguration.ContentLookaheadDays);
+		public EntryCollection GetEntriesForPage(int pageIndex, string acceptLanguageHeader)
+		{
+			Predicate<Entry> pred = null;
 
-            if (_dasBlogSettings.SiteConfiguration.AdjustDisplayTimeZone)
-            {
-                tz = WindowsTimeZone.TimeZones.GetByZoneIndex(_dasBlogSettings.SiteConfiguration.DisplayTimeZoneIndex);
-            }
-            else
-            {
-                tz = new UTCTimeZone();
-            }
+			//Shallow copy as we're going to modify it...and we don't want to modify THE cache.
+			EntryCollection cache = dataService.GetEntries(null, pred, Int32.MaxValue, Int32.MaxValue);
 
-            return _dataService.GetEntriesForDay(fpDayUtc, TimeZone.CurrentTimeZone,
-                                languageFilter,
-                                _dasBlogSettings.SiteConfiguration.FrontPageDayCount, _dasBlogSettings.SiteConfiguration.FrontPageEntryCount, string.Empty);
-        }
+			// remove the posts from the front page
+			EntryCollection fp = GetFrontPagePosts(acceptLanguageHeader);
 
-        public EntryCollection GetEntriesForPage(int pageIndex)
-        {
-            Predicate<Entry> pred = null;
+			cache.RemoveRange(0, fp.Count);
 
-            //Shallow copy as we're going to modify it...and we don't want to modify THE cache.
-            EntryCollection cache = _dataService.GetEntries(null, pred, Int32.MaxValue, Int32.MaxValue);
+			int entriesPerPage = dasBlogSettings.SiteConfiguration.EntriesPerPage;
 
-            // remove the posts from the front page
-            EntryCollection fp = GetFrontPagePosts();
+			// compensate for frontpage
+			if ((pageIndex - 1) * entriesPerPage < cache.Count)
+			{
+				// Remove all entries before the current page's first entry.
+				int end = (pageIndex - 1) * entriesPerPage;
+				cache.RemoveRange(0, end);
 
-            cache.RemoveRange(0, fp.Count);
+				// Remove all entries after the page's last entry.
+				if (cache.Count - entriesPerPage > 0)
+				{
+					cache.RemoveRange(entriesPerPage, cache.Count - entriesPerPage);
+					// should match
+					bool postCount = cache.Count <= entriesPerPage;
+				}
 
-            int entriesPerPage = _dasBlogSettings.SiteConfiguration.EntriesPerPage;
+				return dataService.GetEntries(null, EntryCollectionFilter.DefaultFilters.IsInEntryIdCacheEntryCollection(cache),
+					Int32.MaxValue,
+					Int32.MaxValue);
+			}
 
-            // compensate for frontpage
-            if ((pageIndex - 1) * entriesPerPage < cache.Count)
-            {
-                // Remove all entries before the current page's first entry.
-                int end = (pageIndex - 1) * entriesPerPage;
-                cache.RemoveRange(0, end);
+			return new EntryCollection();
+		}
 
-                // Remove all entries after the page's last entry.
-                if (cache.Count - entriesPerPage > 0)
-                {
-                    cache.RemoveRange(entriesPerPage, cache.Count - entriesPerPage);
-                    // should match
-                    bool postCount = cache.Count <= entriesPerPage;
-                }
+		
+		public EntryCollection SearchEntries(string searchString, string acceptLanguageHeader)
+		{
+			var searchWords = GetSearchWords(searchString);
 
-                return _dataService.GetEntries(null, EntryCollectionFilter.DefaultFilters.IsInEntryIdCacheEntryCollection(cache),
-                    Int32.MaxValue,
-                    Int32.MaxValue);
-            }
+			var entries = dataService.GetEntriesForDay(DateTime.MaxValue.AddDays(-2), 
+											dasBlogSettings.GetConfiguredTimeZone(), 
+											acceptLanguageHeader, int.MaxValue, int.MaxValue, null);
 
-            return new EntryCollection();
-        }
+			// no search term provided, return all the results
+			if (searchWords.Count == 0) return entries;
+
+			EntryCollection matchEntries = new EntryCollection();
+
+			foreach (Entry entry in entries)
+			{
+				string entryTitle = entry.Title;
+				string entryDescription = entry.Description;
+				string entryContent = entry.Content;
+
+				foreach (string searchWord in searchWords)
+				{
+					if (entryTitle != null)
+					{
+						if (searchEntryForWord(entryTitle, searchWord))
+						{
+							if (!matchEntries.Contains(entry))
+							{
+								matchEntries.Add(entry);
+							}
+							continue;
+						}
+					}
+					if (entryDescription != null)
+					{
+						if (searchEntryForWord(entryDescription, searchWord))
+						{
+							if (!matchEntries.Contains(entry))
+							{
+								matchEntries.Add(entry);
+							}
+							continue;
+						}
+					}
+					if (entryContent != null)
+					{
+						if (searchEntryForWord(entryContent, searchWord))
+						{
+							if (!matchEntries.Contains(entry))
+							{
+								matchEntries.Add(entry);
+							}
+							continue;
+						}
+					}
+				}
+			}
+
+			// log the search to the event log
+			/*
+						ILoggingDataService logService = requestPage.LoggingService;
+						string referrer = Request.UrlReferrer != null ? Request.UrlReferrer.AbsoluteUri : Request.ServerVariables["REMOTE_ADDR"];	
+						logger.LogInformation(
+							new EventDataItem(EventCodes.Search, String.Format("{0}", searchString), referrer));
+			*/
+
+			return matchEntries;
+		}
 
 		public EntrySaveState CreateEntry(Entry entry)
 		{
-			return InternalSaveEntry(entry, null, null);
+			var rtn = InternalSaveEntry(entry, null, null);
+			LogEvent(EventCodes.EntryAdded, entry);
+			return rtn;
 		}
 
 		public EntrySaveState UpdateEntry(Entry entry)
 		{
-			return InternalSaveEntry(entry, null, null);
+			var rtn = InternalSaveEntry(entry, null, null);
+			LogEvent(EventCodes.EntryChanged, entry);
+			return rtn;
 		}
 
 		public void DeleteEntry(string postid)
 		{
-			_dataService.DeleteEntry(postid, null);
+			var entry = GetEntryForEdit(postid);
+			dataService.DeleteEntry(postid, null);
+
+			LogEvent(EventCodes.EntryDeleted, entry);
+		}
+
+		private static StringCollection GetSearchWords(string searchString)
+		{
+			var searchWords = new StringCollection();
+
+			if (string.IsNullOrWhiteSpace(searchString))
+				return searchWords;
+
+			string[] splitString = Regex.Split(searchString, @"(""[^""]*"")", RegexOptions.IgnoreCase |
+				RegexOptions.Compiled);
+
+			for (int index = 0; index < splitString.Length; index++)
+			{
+				if (splitString[index] != "")
+				{
+					if (index == splitString.Length - 1)
+					{
+						foreach (string s in splitString[index].Split(' '))
+						{
+							if (s != "") searchWords.Add(s);
+						}
+					}
+					else
+					{
+						searchWords.Add(splitString[index].Substring(1, splitString[index].Length - 2));
+					}
+				}
+			}
+
+			return searchWords;
+		}
+
+		private bool searchEntryForWord(string sourceText, string searchWord)
+		{
+			// Remove any tags from sourceText.
+			sourceText = stripTags.Replace(sourceText, String.Empty);
+
+			CompareInfo myComp = CultureInfo.InvariantCulture.CompareInfo;
+			return (myComp.IndexOf(sourceText, searchWord, CompareOptions.IgnoreCase) >= 0);
+		}
+
+		private void LogEvent(EventCodes eventCode, Entry entry)
+		{
+			logger.LogInformation(new EventDataItem(eventCode, MakePermaLinkFromCompressedTitle(entry), entry.Title));
+		}
+
+		private Uri MakePermaLinkFromCompressedTitle(Entry entry)
+		{
+			if (dasBlogSettings.SiteConfiguration.EnableTitlePermaLinkUnique)
+			{
+				return new Uri(dasBlogSettings.RelativeToRoot(entry.CompressedTitle));
+			}
+			else
+			{
+				return new Uri(dasBlogSettings.RelativeToRoot(entry.CreatedUtc.ToString("yyyyMMdd") + "/" + entry.CompressedTitle));
+			}
 		}
 
 		private EntrySaveState InternalSaveEntry(Entry entry, TrackbackInfoCollection trackbackList, CrosspostInfoCollection crosspostList)
@@ -123,12 +267,12 @@ namespace DasBlog.Managers
 
 			EntrySaveState rtn = EntrySaveState.Failed;
 			// we want to prepopulate the cross post collection with the crosspost footer
-			if (_dasBlogSettings.SiteConfiguration.EnableCrossPostFooter && _dasBlogSettings.SiteConfiguration.CrossPostFooter != null 
-				&& _dasBlogSettings.SiteConfiguration.CrossPostFooter.Length > 0)
+			if (dasBlogSettings.SiteConfiguration.EnableCrossPostFooter && dasBlogSettings.SiteConfiguration.CrossPostFooter != null 
+				&& dasBlogSettings.SiteConfiguration.CrossPostFooter.Length > 0)
 			{
 				foreach (CrosspostInfo info in crosspostList)
 				{
-					info.CrossPostFooter = _dasBlogSettings.SiteConfiguration.CrossPostFooter;
+					info.CrossPostFooter = dasBlogSettings.SiteConfiguration.CrossPostFooter;
 				}
 			}
 
@@ -145,81 +289,120 @@ namespace DasBlog.Managers
 				if (entry.Categories == null)
 					entry.Categories = "";
 
-				rtn = _dataService.SaveEntry(entry, 
-					(_dasBlogSettings.SiteConfiguration.PingServices.Count > 0) ?
-						new WeblogUpdatePingInfo(_dasBlogSettings.SiteConfiguration.Title, _dasBlogSettings.GetBaseUrl(), _dasBlogSettings.GetBaseUrl(), _dasBlogSettings.RsdUrl, _dasBlogSettings.SiteConfiguration.PingServices) : null,
-					(entry.IsPublic) ?
-						trackbackList : null,
-					_dasBlogSettings.SiteConfiguration.EnableAutoPingback && entry.IsPublic ?
-						new PingbackInfo(
-							_dasBlogSettings.GetPermaLinkUrl(entry.EntryId),
-							entry.Title,
-							entry.Description,
-							_dasBlogSettings.SiteConfiguration.Title) : null,
-					crosspostList);
+				rtn = dataService.SaveEntry(entry, MaybeBuildWeblogPingInfo(), entry.IsPublic
+											? trackbackList : null, MaybeBuildPingbackInfo(entry), crosspostList);
 
 				//TODO: SendEmail(entry, siteConfig, logService);
-
 			}
 			catch (Exception ex)
 			{
 				//TODO: Do something with this????
 				// StackTrace st = new StackTrace();
 				// logService.AddEvent(new EventDataItem(EventCodes.Error, ex.ToString() + Environment.NewLine + st.ToString(), ""));
+
+				LoggedException le = new LoggedException("file failure", ex);
+
+				var edi = new EventDataItem(EventCodes.Error, null, "Failed to Save a Post on {date}", DateTime.Now.ToShortDateString());
+				logger.LogError(edi,le);
 			}
 
 			// we want to invalidate all the caches so users get the new post
-			// TODO: BreakCache(entry.GetSplitCategories());
+			// BreakCache(entry.GetSplitCategories());
 
 			return rtn;
 		}
 
-		private void BreakCache(string[] categories)
+		/// <summary>
+		/// not sure what this is about but it is legacy
+		/// TODO: reconsider when strategy for handling pingback in legacy site.config is decided.
+		/// </summary>
+		private WeblogUpdatePingInfo MaybeBuildWeblogPingInfo()
 		{
-			newtelligence.DasBlog.Web.Core.DataCache cache = newtelligence.DasBlog.Web.Core.CacheFactory.GetCache();
-
-			// break the caching
-			cache.Remove("BlogCoreData");
-			cache.Remove("Rss::" + _dasBlogSettings.SiteConfiguration.RssDayCount.ToString() + ":" + _dasBlogSettings.SiteConfiguration.RssEntryCount.ToString());
-
-			foreach (string category in categories)
+			var fakePingServices = new PingServiceCollection
 			{
-				string CacheKey = "Rss:" + category + ":" + _dasBlogSettings.SiteConfiguration.RssDayCount.ToString() + ":" + _dasBlogSettings.SiteConfiguration.RssEntryCount.ToString();
-				cache.Remove(CacheKey);
-			}
+				new PingService
+				{
+					Endpoint = "http://ping.feedburner.com",
+					Name = "FeedBurner",
+					Url = "http://www.feedburner.com",
+					PingApi = PingService.PingApiType.Basic
+				}
+			};
+			return
+				fakePingServices.Count > 0
+				? new WeblogUpdatePingInfo(dasBlogSettings.SiteConfiguration.Title,
+												dasBlogSettings.SiteConfiguration.Root,
+												dasBlogSettings.PingBackUrl,
+												dasBlogSettings.RssUrl,
+												fakePingServices)
+				: null;
+		}
+
+		/// <summary>
+		/// not sure what this is about but it is legacy
+		/// TODO: reconsider when strategy for handling pingback in legacy site.config is decided.
+		/// </summary>
+		private PingbackInfo MaybeBuildPingbackInfo(Entry entry)
+		{
+			return dasBlogSettings.SiteConfiguration.EnableAutoPingback && entry.IsPublic
+				? new PingbackInfo(dasBlogSettings.GetPermaLinkUrl(entry.EntryId), entry.Title,
+									entry.Description, dasBlogSettings.SiteConfiguration.Title) 
+				: null;
 		}
 
 		public CommentSaveState AddComment(string postid, Comment comment)
 		{
-			CommentSaveState est = CommentSaveState.Failed;
+			var saveState = CommentSaveState.Failed;
+			var entry = dataService.GetEntry(postid);
 
-			Entry entry = _dataService.GetEntry(postid);
+			if (!dasBlogSettings.SiteConfiguration.EnableComments || !entry.AllowComments)
+			{
+				return CommentSaveState.SiteCommentsDisabled;
+			}
 
 			if (entry != null)
 			{
-				// Are comments allowed
+				var targetComment = DateTime.UtcNow.AddDays(-1 * dasBlogSettings.SiteConfiguration.DaysCommentsAllowed);
 
-				_dataService.AddComment(comment);
+				if ((targetComment > entry.CreatedUtc))
+				{
+					return CommentSaveState.PostCommentsDisabled;
+				}
 
-				est = CommentSaveState.Added;
+				// FilterHtml html encodes anything we don't like
+				string filteredText = dasBlogSettings.FilterHtml(comment.Content);
+				comment.Content = filteredText;
+
+				if (dasBlogSettings.SiteConfiguration.SendCommentsByEmail)
+				{
+					var actions = ComposeMailForUsers(entry, comment);
+					dataService.AddComment(comment, actions);
+				}
+				else
+				{
+					dataService.AddComment(comment);
+				}
+
+				
+				saveState = CommentSaveState.Added;
 			}
 			else
 			{
-				est = CommentSaveState.NotFound;
+				saveState = CommentSaveState.NotFound;
 			}
 
-			return est;
+			return saveState;
 		}
 
 		public CommentSaveState DeleteComment(string postid, string commentid)
 		{
 			CommentSaveState est = CommentSaveState.Failed;
 
-			Entry entry = _dataService.GetEntry(postid);
+			Entry entry = dataService.GetEntry(postid);
 
 			if (entry != null && !string.IsNullOrEmpty(commentid))
 			{
-				_dataService.DeleteComment(postid, commentid);
+				dataService.DeleteComment(postid, commentid);
 
 				est = CommentSaveState.Deleted;
 			}
@@ -234,11 +417,11 @@ namespace DasBlog.Managers
 		public CommentSaveState ApproveComment(string postid, string commentid)
 		{
 			CommentSaveState est = CommentSaveState.Failed;
-			Entry entry = _dataService.GetEntry(postid);
+			Entry entry = dataService.GetEntry(postid);
 
 			if (entry != null && !string.IsNullOrEmpty(commentid))
 			{
-				_dataService.ApproveComment(postid, commentid);
+				dataService.ApproveComment(postid, commentid);
 
 				est = CommentSaveState.Approved;
 			}
@@ -252,13 +435,154 @@ namespace DasBlog.Managers
 
 		public CommentCollection GetComments(string postid, bool allComments)
 		{
-			return _dataService.GetCommentsFor(postid, allComments);
+			return dataService.GetCommentsFor(postid, allComments);
 		}
 
+		public CommentCollection GetAllComments()
+		{
+			return dataService.GetAllComments();
+		}
+
+		public List<Comment> GetCommentsFrontPage()
+		{
+			var comments = dataService.GetAllComments().OrderByDescending(d => d.CreatedUtc).ToList();
+
+			return comments.Take(COMMENT_PAGE_SIZE).ToList();
+		}
+
+		public List<Comment> GetCommentsForPage(int pageIndex)
+		{
+			var comments = dataService.GetAllComments().OrderByDescending(d => d.CreatedUtc).ToList();
+
+			return comments.Skip((pageIndex) * COMMENT_PAGE_SIZE).Take(COMMENT_PAGE_SIZE).ToList();
+		}
 
 		public CategoryCacheEntryCollection GetCategories()
 		{
-			return _dataService.GetCategories();
+			return dataService.GetCategories();
+		}
+
+		private string GetFromEmail()
+		{
+			if (string.IsNullOrWhiteSpace(dasBlogSettings.SiteConfiguration.SmtpFromEmail))
+			{
+				return dasBlogSettings.SiteConfiguration.SmtpUserName;
+			}
+
+			return dasBlogSettings.SiteConfiguration.SmtpFromEmail.Trim();
+		}
+		public bool SendTestEmail()
+		{
+			var emailMessage = new MailMessage();
+			emailMessage.From = new MailAddress(GetFromEmail());
+			emailMessage.To.Add(dasBlogSettings.SiteConfiguration.NotificationEMailAddress);
+			emailMessage.To.Add(dasBlogSettings.SiteConfiguration.Contact);
+
+			foreach (var user in dasBlogSettings.SecurityConfiguration.Users)
+			{
+				if (!string.IsNullOrWhiteSpace(user.EmailAddress))
+				{
+					emailMessage.To.Add(user.EmailAddress);
+				}
+			}
+
+			emailMessage.Subject = string.Format("SMTP email from {0}", dasBlogSettings.SiteConfiguration.Title);
+			emailMessage.Body = "Test ";
+
+			var sendMailInfo = dasBlogSettings.GetMailInfo(emailMessage);
+
+			try
+			{
+				sendMailInfo.SendMyMessage();
+			}
+			catch(Exception ex)
+			{
+				logger.LogInformation(new EventDataItem(EventCodes.SmtpError, new Uri(dasBlogSettings.SiteConfiguration.Root), 
+									string.Format("SMTP Test Error: {0}", ex.Message)));
+
+				return false;
+			}
+
+			return true;
+		}
+
+		private object[] ComposeMailForUsers(Entry entry, Comment c)
+		{
+			var actions = new List<object>();
+			
+			foreach (var user in dasBlogSettings.SecurityConfiguration.Users)
+			{
+				if (string.IsNullOrWhiteSpace(user.EmailAddress))
+					continue;
+
+				if (user.NotifyOnAllComment || (user.NotifyOnOwnComment && entry.Author.ToUpper() == user.Name.ToUpper()))
+				{
+					var sendMailInfo = ComposeMail(c);
+					sendMailInfo.Message.To.Add(user.EmailAddress);
+					actions.Add(sendMailInfo);
+				}
+			}
+
+			return actions.ToArray();
+		}
+
+		private SendMailInfo ComposeMail(Comment c)
+		{
+			var emailMessage = new MailMessage();
+
+			if (!string.IsNullOrWhiteSpace(dasBlogSettings.SiteConfiguration.NotificationEMailAddress))
+			{
+				emailMessage.To.Add(dasBlogSettings.SiteConfiguration.NotificationEMailAddress);
+			}
+			else
+			{
+				emailMessage.To.Add(dasBlogSettings.SiteConfiguration.Contact);
+			}
+
+			emailMessage.Subject = string.Format("Weblog comment by '{0}' from '{1}' on '{2}'", c.Author, c.AuthorHomepage, c.TargetTitle);
+
+			if (dasBlogSettings.SiteConfiguration.CommentsRequireApproval)
+			{
+				emailMessage.Body = string.Format("{0}\r\nComments page: {1}\r\n\r\nRequires approval.\r\n\r\nCommentor Email: {2}\r\n\r\nIP Address: {3}\r\n\r\nLogin Here: {4}",
+				   WebUtility.HtmlDecode(c.Content),
+				   dasBlogSettings.GetCommentViewUrl(c.TargetEntryId),
+				   c.AuthorEmail,
+				   c.AuthorIPAddress,
+				   dasBlogSettings.RelativeToRoot("account/login"));
+			}
+			else
+			{
+				emailMessage.Body = string.Format("{0}\r\nComments page: {1}\r\n\r\nCommentor Email: {2}\r\n\r\nIP Address: {3}\r\n\r\nLogin Here: {4}",
+				   WebUtility.HtmlDecode(c.Content),
+				   dasBlogSettings.GetCommentViewUrl(c.TargetEntryId),
+				   c.AuthorEmail,
+				   c.AuthorIPAddress,
+				   dasBlogSettings.RelativeToRoot("account/login"));
+			}
+
+			emailMessage.IsBodyHtml = false;
+			emailMessage.BodyEncoding = System.Text.Encoding.UTF8;
+
+			emailMessage.From = new MailAddress(GetFromEmail());
+
+			return dasBlogSettings.GetMailInfo(emailMessage);
 		}
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

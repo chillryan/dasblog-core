@@ -1,24 +1,40 @@
-﻿using System;
-using AutoMapper;
+﻿using AutoMapper;
 using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
+using System.Linq;
 using DasBlog.Web.Models.BlogViewModels;
+using DasBlog.Web.Settings;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using newtelligence.DasBlog.Runtime;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using EventCodes = DasBlog.Services.ActivityLogs.EventCodes;
+using DasBlog.Services.ActivityLogs;
 
 namespace DasBlog.Web.Controllers
 {
 	[Route("archive")]
-	public class ArchiveController : Controller
+	[ResponseCache(Duration = 14400, Location = ResponseCacheLocation.Any)]
+	public class ArchiveController : DasBlogBaseController
 	{
-		private IArchiveManager _archiveManager;
-		private IHttpContextAccessor _httpContextAccessor;
+		private readonly IArchiveManager archiveManager;
+		private readonly IHttpContextAccessor httpContextAccessor;
 		private readonly IMapper mapper;
+		private readonly ILogger<ArchiveController> logger;
+		private readonly IDasBlogSettings dasBlogSettings;
+		private const string ARCHIVE = "Archive";
 
-		public ArchiveController(IArchiveManager archiveManager, IHttpContextAccessor httpContextAccessor, IMapper mapper)
+		public ArchiveController(IArchiveManager archiveManager, IHttpContextAccessor httpContextAccessor, IMapper mapper,
+									ILogger<ArchiveController> logger, IDasBlogSettings settings) : base(settings)
 		{
-			_archiveManager = archiveManager;
-			_httpContextAccessor = httpContextAccessor;
+			this.dasBlogSettings = settings;
+			this.archiveManager = archiveManager;
+			this.httpContextAccessor = httpContextAccessor;
 			this.mapper = mapper;
+			this.logger = logger;
 		}
 
 		[HttpGet("")]
@@ -30,15 +46,15 @@ namespace DasBlog.Web.Controllers
 		[HttpGet("{year}")]
 		public IActionResult Archive(int year)
 		{
-			DateTime dateTime = new DateTime(year, 1, 1);
-			var months = GetMonthsViewModel(dateTime);
+			var dateTime = new DateTime(year, 1, 1);
+			var months = GetMonthsViewModel(dateTime, true);
 			return View(months);
 		}
 
 		[HttpGet("{year}/{month}")]
 		public IActionResult Archive(int year, int month)
 		{
-			DateTime dateTime = new DateTime(year, month, 1);
+			var dateTime = new DateTime(year, month, 1);
 			var months = GetMonthsViewModel(dateTime);
 			return View(months);
 		}
@@ -46,20 +62,70 @@ namespace DasBlog.Web.Controllers
 		[HttpGet("{year}/{month}/{day}")]
 		public IActionResult Archive(int year, int month, int day)
 		{
-			DateTime dateTime = new DateTime(year, month, day);
+			var dateTime = new DateTime(year, month, day);
 			var months = GetMonthsViewModel(dateTime);
 			return View(months);
 		}
 
-		private MonthViewViewModel GetMonthsViewModel(DateTime dateTime)
+		[HttpGet("all")]
+		public IActionResult ArchiveAll()
 		{
-			string languageFilter = _httpContextAccessor.HttpContext.Request.Headers["Accept-Language"];
+			var entries = new EntryCollection();
+			var languageFilter = httpContextAccessor.HttpContext.Request.Headers["Accept-Language"];
+			var listofyears = archiveManager.GetDaysWithEntries().Select(i => i.Year).Distinct();
+
+			foreach (var year in listofyears)
+			{
+				entries.AddRange(
+				archiveManager.GetEntriesForYear(new DateTime(year, 1, 1) , languageFilter).OrderByDescending(x => x.CreatedUtc));
+			}
+
+			var alvm = new ArchiveListViewModel();
+
+			foreach (var i in entries.ToList().Select(entry => mapper.Map<PostViewModel>(entry)).ToList())
+			{
+				var index = int.Parse(string.Format("{0}{1}", i.CreatedDateTime.Year, string.Format("{0:00}", i.CreatedDateTime.Month)));
+
+				if (alvm.MonthEntries.ContainsKey(index))
+				{
+					alvm.MonthEntries[index].Add(i);
+				}
+				else 
+				{
+					var list = new List<PostViewModel>() { i };
+					alvm.MonthEntries.Add(index, list);
+				}
+			}
+
+			return View(alvm);
+		}
+
+		private List<MonthViewViewModel> GetMonthsViewModel(DateTime dateTime, bool wholeYear = false)
+		{
+			string languageFilter = httpContextAccessor.HttpContext.Request.Headers["Accept-Language"];
 
 			ViewBag.PreviousMonth = dateTime.AddMonths(-1).Date;
 			ViewBag.NextMonth = dateTime.AddMonths(1).Date;
 			ViewBag.CurrentMonth = dateTime.Date;
-			var entries = _archiveManager
-				.GetEntriesForMonth(dateTime, languageFilter);
+
+			var stopWatch = new Stopwatch();
+			stopWatch.Start();
+
+			//unique list of years for the top of archives
+			var daysWithEntries = archiveManager.GetDaysWithEntries();
+			ViewBag.Years = daysWithEntries.Select(i => i.Year).Distinct();
+
+			EntryCollection entries;
+			if (wholeYear)
+				entries = archiveManager.GetEntriesForYear(dateTime, languageFilter);
+			else
+				entries = archiveManager.GetEntriesForMonth(dateTime, languageFilter);
+
+
+			stopWatch.Stop();
+			logger.LogInformation(new DasBlog.Services.ActivityLogs.EventDataItem(EventCodes.Site, null, $"ArchiveController (Date: {dateTime.ToLongDateString()}; Year: {wholeYear}) Time elapsed: {stopWatch.Elapsed.TotalMilliseconds}ms"));
+
+			DefaultPage(ARCHIVE);
 			return MonthViewViewModel.Create(dateTime, entries, mapper);
 		}
 	}

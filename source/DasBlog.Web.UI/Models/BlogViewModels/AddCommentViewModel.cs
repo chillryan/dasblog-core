@@ -5,7 +5,9 @@ namespace DasBlog.Web.Models.BlogViewModels
     public class AddCommentViewModel
     {
 		[Required]
+		[Display(Name = "Name")]
 		[StringLength(60, MinimumLength = 1)]
+		[RegularExpression("^[\\w'\\-,.][^0-9_!¡?÷?¿/\\+=@#$%ˆ&*(){}|~<>;:[\\]]{2,}$", ErrorMessage = "Invalid name format")]
 		public string Name { get; set; }
 
 		[Required]
@@ -16,14 +18,19 @@ namespace DasBlog.Web.Models.BlogViewModels
 
 		[Display(Name = "Home page (optional)")]
 		[StringLength(60, MinimumLength = 1)]
+		[Url(ErrorMessage ="Invalid home page")]
 		public string HomePage { get; set; }
 
 		[Required]
-		[Display(Name = "Comment")]
+		[Display(Name = "Content")]
 		[StringLength(600, MinimumLength = 1)]
-		public string Comment { get; set; }
+		public string Content { get; set; }
+
+		public string CheesyQuestionAnswered { get; set; }
 
 		[Required]
 		public string TargetEntryId { get; set; }
+
+		
 	}
 }

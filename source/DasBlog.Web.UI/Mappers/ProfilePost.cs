@@ -1,13 +1,13 @@
-﻿using System;
+﻿using AutoMapper;
+using DasBlog.Web.Models.BlogViewModels;
+using DasBlog.Core.Common;
+using DasBlog.Core.Extensions;
+using newtelligence.DasBlog.Runtime;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
-using AutoMapper;
-using DasBlog.Core;
-using DasBlog.Web.Models.BlogViewModels;
-using newtelligence.DasBlog.Runtime;
+using DasBlog.Services;
+using DasBlog.Core.Common.Comments;
+using DasBlog.Web.Models.AdminViewModels;
 
 namespace DasBlog.Web.Mappers
 {
@@ -25,21 +25,23 @@ namespace DasBlog.Web.Mappers
 
 			CreateMap<Entry, PostViewModel>()
 				.ForMember(dest => dest.Title, opt => opt.MapFrom(src => src.Title))
-				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
-				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content ?? string.Empty))
+				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description ?? string.Empty))
 				.ForMember(dest => dest.Categories, opt => opt.MapFrom(src => ConvertCategory(src.Categories)))
 				.ForMember(dest => dest.EntryId, opt => opt.MapFrom(src => src.EntryId))
 				.ForMember(dest => dest.AllowComments, opt => opt.MapFrom(src => src.AllowComments))
 				.ForMember(dest => dest.IsPublic, opt => opt.MapFrom(src => src.IsPublic))
 				.ForMember(dest => dest.Syndicated, opt => opt.MapFrom(src => src.Syndicated))
-				.ForMember(dest => dest.PermaLink, opt => opt.MapFrom(src => _dasBlogSettings.GetPermaTitle(src.CompressedTitle)))
-				.ForMember(dest => dest.CreatedDateTime, opt => opt.MapFrom(src => src.CreatedLocalTime))
-				.ForMember(dest => dest.ModifiedDateTime, opt => opt.MapFrom(src => src.ModifiedLocalTime));
+				.ForMember(dest => dest.PermaLink, opt => opt.MapFrom(src => _dasBlogSettings.GeneratePostUrl(src)))
+				.ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.Content.FindFirstImage()))
+				.ForMember(dest => dest.VideoUrl, opt => opt.MapFrom(src => src.Content.FindFirstYouTubeVideo()))
+				.ForMember(dest => dest.CreatedDateTime, opt => opt.MapFrom(src => _dasBlogSettings.GetDisplayTime(src.CreatedUtc)))
+				.ForMember(dest => dest.ModifiedDateTime, opt => opt.MapFrom(src => _dasBlogSettings.GetDisplayTime(src.ModifiedUtc)));
 
 			CreateMap<PostViewModel, Entry>()
 				.ForMember(dest => dest.Title, opt => opt.MapFrom(src => src.Title))
-				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
-				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => (src.Description == null) ? string.Empty : src.Description))
+				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content ?? string.Empty))
+				.ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description ?? string.Empty))
 				.ForMember(dest => dest.Categories, opt => opt.MapFrom(src => string.Join(";", src.AllCategories.Where(x => x.Checked).Select(x => x.Category))))
 				.ForMember(dest => dest.EntryId, opt => opt.MapFrom(src => src.EntryId))
 				.ForMember(dest => dest.AllowComments, opt => opt.MapFrom(src => src.AllowComments))
@@ -58,47 +60,67 @@ namespace DasBlog.Web.Mappers
 			CreateMap<Comment, CommentViewModel>()
 				.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Author))
 				.ForMember(dest => dest.Text, opt => opt.MapFrom(src => src.Content))
-				.ForMember(dest => dest.GravatarHashId, opt => opt.MapFrom(src => GetGravatarHash(src.AuthorEmail)))
-				.ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.CreatedLocalTime))
-				.ForMember(dest => dest.HomePageUrl, opt => opt.MapFrom(src => src.AuthorHomepage));
+				.ForMember(dest => dest.GravatarHashId, opt => opt.MapFrom(src => Utils.GetGravatarHash(src.AuthorEmail)))
+				.ForMember(dest => dest.Date, opt => opt.MapFrom(src => _dasBlogSettings.GetDisplayTime(src.CreatedUtc)))
+				.ForMember(dest => dest.HomePageUrl, opt => opt.MapFrom(src => src.AuthorHomepage))
+				.ForMember(dest => dest.BlogPostId, opt => opt.MapFrom(src => src.TargetEntryId))
+				.ForMember(dest => dest.CommentId, opt => opt.MapFrom(src => src.EntryId))
+				.ForMember(dest => dest.SpamState, opt => opt.MapFrom(src => src.SpamState))
+				.ForMember(dest => dest.IsPublic, opt => opt.MapFrom(src => src.IsPublic));
+
+			CreateMap<Comment, CommentAdminViewModel>()
+				.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Author))
+				.ForMember(dest => dest.Text, opt => opt.MapFrom(src => src.Content))
+				.ForMember(dest => dest.GravatarHashId, opt => opt.MapFrom(src => Utils.GetGravatarHash(src.AuthorEmail)))
+				.ForMember(dest => dest.Date, opt => opt.MapFrom(src => _dasBlogSettings.GetDisplayTime(src.CreatedUtc)))
+				.ForMember(dest => dest.HomePageUrl, opt => opt.MapFrom(src => src.AuthorHomepage))
+				.ForMember(dest => dest.BlogPostId, opt => opt.MapFrom(src => src.TargetEntryId))
+				.ForMember(dest => dest.CommentId, opt => opt.MapFrom(src => src.EntryId))
+				.ForMember(dest => dest.SpamState, opt => opt.MapFrom(src => src.SpamState))
+				.ForMember(dest => dest.IsPublic, opt => opt.MapFrom(src => src.IsPublic))
+				.ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.AuthorEmail))
+				.ForMember(dest => dest.AuthorIPAddress, opt => opt.MapFrom(src => src.AuthorIPAddress));
 
 			CreateMap<AddCommentViewModel, Comment>()
 				.ForMember(dest => dest.Author, opt => opt.MapFrom(src => src.Name))
-				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Comment))
+				.ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
 				.ForMember(dest => dest.AuthorEmail, opt => opt.MapFrom(src => src.Email))
 				.ForMember(dest => dest.TargetEntryId, opt => opt.MapFrom(src => src.TargetEntryId))
 				.ForMember(dest => dest.AuthorHomepage, opt => opt.MapFrom(src => src.HomePage));
+
+			CreateMap<Entry, CategoryPostItem>()
+				.ForMember(dest => dest.BlogTitle, opt => opt.MapFrom(src => src.Title))
+				.ForMember(dest => dest.BlogId, opt => opt.MapFrom(src => _dasBlogSettings.GeneratePostUrl(src)))
+				.ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.GetSplitCategories().FirstOrDefault()))
+				.ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.CreatedLocalTime));
+
+			CreateMap<Tag, TagViewModel>()
+				.ForMember(dest => dest.Allowed, opt => opt.MapFrom(src => src.Allowed))
+				.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+				.ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes));
+
+			CreateMap<TagViewModel, Tag>()
+				.ForMember(dest => dest.Allowed, opt => opt.MapFrom(src => src.Allowed))
+				.ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+				.ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.Attributes));
+
+			CreateMap<ValidCommentTags, ValidCommentTagsViewModel>()
+				.ForMember(dest => dest.Tag, opt => opt.MapFrom(src => src.Tag));
+
+			CreateMap<ValidCommentTagsViewModel, ValidCommentTags>()
+				.ForMember(dest => dest.Tag, opt => opt.MapFrom(src => src.Tag));
+
 		}
 
 		private IList<CategoryViewModel> ConvertCategory(string category)
 		{
-			return category
-				.Split(";")
-				.Select(c => new CategoryViewModel
-				{
-					Category = c,
-					CategoryUrl = Regex.Replace(c.ToLower(), @"[^A-Za-z0-9_\.~]+", _dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement)
-				}).ToList();
-		}
+			if (string.IsNullOrWhiteSpace(category))
+				return new List<CategoryViewModel>();
 
-		private string GetGravatarHash(string email)
-		{
-			string hash = string.Empty;
-			byte[] data, enc;
-
-			data = Encoding.Default.GetBytes(email.ToLowerInvariant());
-
-			using (MD5 md5 = new MD5CryptoServiceProvider())
-			{
-				enc = md5.TransformFinalBlock(data, 0, data.Length);
-				foreach (byte b in md5.Hash)
-				{
-					hash += Convert.ToString(b, 16).ToLower().PadLeft(2, '0');
-				}
-				md5.Clear();
-			}
-
-			return hash;
+			return category.Split(";").ToList().Select(c => new CategoryViewModel {
+													Category = c,
+													CategoryUrl = _dasBlogSettings.CompressTitle(c) })
+													.ToList();
 		}
 	}
 }

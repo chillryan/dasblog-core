@@ -1,51 +1,43 @@
+<p align="center">
+  <a href="https://github.com/poppastring/dasblog-core">
+    <img src="https://github.com/poppastring/dasblog-core/blob/main/images/dasblog.jpg" alt="DasBlog" />
+  </a>
+</p>
+<p align="center">
+	<a href="https://github.com/poppastring/dasblog-core/blob/main/FAQ.md">FAQ</a> |
+	<a href="https://github.com/poppastring/dasblog-core/wiki/1.-Deployment">Deployment</a> |
+	<a href="https://www.poppastring.com/blog/category/dasblog-core">Blog</a> |
+	<a href="https://github.com/poppastring/dasblog-core/blob/main/CONTRIBUTING.md">Contributing to DasBlog Core</a>
+	<br /><br />
+	<a href="https://github.com/poppastring/dasblog-core/releases/">
+		<img src="https://img.shields.io/github/v/release/poppastring/dasblog-core.svg" alt="Latest release" />
+	</a>
+	<a href="https://poppastring.visualstudio.com/dasblog-core/_build/latest?definitionId=2&branchName=main">
+		<img src="https://poppastring.visualstudio.com/dasblog-core/_apis/build/status/poppastring.dasblog-core?branchName=master&jobName=Job&configuration=Job%20windows" alt="Windows Build status" />
+	</a>
+	<a href="https://poppastring.visualstudio.com/dasblog-core/_build/latest?definitionId=2&branchName=main">
+		<img src="https://poppastring.visualstudio.com/dasblog-core/_apis/build/status/poppastring.dasblog-core?branchName=master&jobName=Job&configuration=Job%20linux" alt="Linux Build status" />
+	</a>
+</p>
 
+# DasBlog Core
+One of the primary goals of this project is to create a new blogging engine that preserves the essence of the original [DasBlog Blogging Engine](https://msdn.microsoft.com/en-us/library/aa480016.aspx), we also get the opportunity to take advantage of the modern cross platform goodness of ASP.NET Core.
 
-# Dasblog
-The [DasBlog Blogging Engine](https://msdn.microsoft.com/en-us/library/aa480016.aspx) reintroduced with ASP.NET Core
+## Building 
+If you want to build and contribute code to DasBlog Core please fork this repo and submit a PR, check out the [contribution docs here](https://github.com/poppastring/dasblog-core/blob/main/CONTRIBUTING.md#developers) for more details.
 
-[![Build status](https://ci.appveyor.com/api/projects/status/github/poppastring/dasblog-core?branch=master&svg=true)](https://ci.appveyor.com/project/poppastring/dasblog-core)
+## Deployment
 
-## Core Tenets - "This we believe"
+You can deploy anywhere where .NET Core is hosted, here are instructions for Azure App Services:
+* [Deploying to Azure App Services for Linux](https://github.com/poppastring/dasblog-core/wiki/1.-Deployment#deploy-to-azure-app-services-for-linux)
+* [Deploying to Azure App Services for Windows](https://github.com/poppastring/dasblog-core/wiki/1.-Deployment#deploy-to-azure-app-services-for-windows)
 
-- We want to pragmatically reuse core DasBlog projects where feasible (includes reusing existing config files).
-- Do not be afraid to abandon features/projects that are easily solved with a NuGet package (Pop3, CAPTCHA, Noda Time, etc.)
-- Let's use Razor for "Themes"
-- Port the custom logging solution to use .NET Core
-- DI all the things (avoid massive static objects)
-- WISH: Build on Linux (clone/build)
-- WISH: Docker version with XML files outside in volume mount
+After deploying the app you should immediately [update  the security settings](https://github.com/poppastring/dasblog-core/wiki/2.-Configure-your-blog).   
 
+## Documentation
+Check out the [wiki](https://github.com/poppastring/dasblog-core/wiki) for additional information on DasBlog Core fundamentals, architecture and themes.
 
-## Installing the development tools
+## Code Diagram
+![Visualization of the codebase](./diagram.svg) or an [interactive code diagram here](https://octo-repo-visualization.vercel.app/?repo=poppastring%2Fdasblog-core).
 
-- Install [.NET Core SDK 2.1.300](https://www.microsoft.com/net/download/thank-you/dotnet-sdk-2.1.300-windows-x64-installer)
-- Install [Visual Studio Community 2017 (15.7.1 or newer)](https://www.visualstudio.com/thank-you-downloading-visual-studio/?sku=Community&rel=15)
-
-You can find more specific installation steps for Windows development [here](https://www.microsoft.com/net/core#windowscmd)
-
-
-## Building
-
-In order to build the DasBlog Core, ensure that you have [Git](https://git-scm.com/downloads) installed.
-
-Fork the repo:
-
-```bash
-git clone https://github.com/[YOUR_GITHUB_ID]/dasblog-core
-```
-
-Change to the "source" directory and open the *DasBlog All.sln* and perform a build.
-
-## What we have completed so far...
-- Upgraded all existing projects to 4.6.X (for .NET Standard 2 support)
-- Created a new ASP.NET Web Core 2 project that shows the blogs home page with posts
-- Integrated ViewLocationExpanders to support "Themes"
-- AddIISUrlRewrite middleware to support 301 redirects for static ".aspx" (archives.aspx, monthview.aspx, etc.)
-- Integrate existing dasBlog config (meta, security, site, etc)
-- Integrate with original DasBlog layer via Manager classes
-- Support for RSS and RSS by category
-- Support for Sitemap
-- Support for paging e.g. page/1, page/2, etc.
-- Add/Edit/Delete blog posts
-- Add Comments
-- Support for Live Writer
+Please [submit an issue](https://github.com/poppastring/dasblog-core/issues) if you encounter any problems.

@@ -1,33 +1,38 @@
-﻿using DasBlog.Managers.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.IO;
+using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
 using newtelligence.DasBlog.Runtime;
-using DasBlog.Core;
 
 namespace DasBlog.Managers
 {
-    public class CategoryManager : ICategoryManager
+	public class CategoryManager : ICategoryManager
     {
-        private IBlogDataService _dataService;
-        private ILoggingDataService _loggingDataService;
-        private readonly IDasBlogSettings _dasBlogSettings;
+        private readonly IBlogDataService dataService;
+        private readonly IDasBlogSettings dasBlogSettings;
 
         public CategoryManager(IDasBlogSettings settings)
         {
-            _dasBlogSettings = settings;
-            _loggingDataService = LoggingDataServiceFactory.GetService(_dasBlogSettings.WebRootDirectory + _dasBlogSettings.SiteConfiguration.LogDir);
-            _dataService = BlogDataServiceFactory.GetService(_dasBlogSettings.WebRootDirectory + _dasBlogSettings.SiteConfiguration.ContentDir, _loggingDataService);
-        }
+            dasBlogSettings = settings;
+
+			var loggingDataService = LoggingDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.LogDir)); ;
+			dataService = BlogDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.ContentDir), loggingDataService);
+		}
 
         public EntryCollection GetEntries()
         {
-            return _dataService.GetEntries(false);
+            return dataService.GetEntries(false);
         }
 
         public EntryCollection GetEntries(string category, string acceptLanguages)
         {
-            return _dataService.GetEntriesForCategory(category, acceptLanguages);
+			category = category.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, "+");
+            return dataService.GetEntriesForCategory(category, acceptLanguages);
         }
-    }
+
+		public string GetCategoryTitle(string categoryurl)
+		{
+			categoryurl = categoryurl.Replace(dasBlogSettings.SiteConfiguration.TitlePermalinkSpaceReplacement, "+");
+			return dataService.GetCategoryTitle(categoryurl);
+		}
+	}
 }

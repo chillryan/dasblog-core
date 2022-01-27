@@ -1,53 +1,43 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
+using DasBlog.Services;
 using newtelligence.DasBlog.Runtime;
 
 namespace DasBlog.Web.Models.BlogViewModels
 {
 	public class CategoryListViewModel
 	{
-		public Dictionary<string, List<CategoryListItem>> Items { get; protected set; } = new Dictionary<string, List<CategoryListItem>>();
-
-		public static CategoryListViewModel Create(EntryCollection entries)
+		public SortedDictionary<string, List<CategoryPostItem>> Categories { get; protected set; } = new SortedDictionary<string, List<CategoryPostItem>>();
+		
+		public static CategoryListViewModel Create(EntryCollection entries, IDasBlogSettings dasBlogSettings, string categoryName = "")
 		{
 			var viewModel = new CategoryListViewModel();
 			foreach (var entry in entries)
 			{
-				var categories = entry.GetSplitCategories();
+				string[] categories = null;
+				if (categoryName == string.Empty)
+				{
+					categories = entry.GetSplitCategories();
+				}
+				else
+				{
+					categories = new string[] { categoryName };
+				}
+
 				foreach (var category in categories)
 				{
-					var archiveItem = CategoryListItem.CreateFromEntry(entry);
+					var archiveItem = CategoryPostItem.CreateFromEntry(entry, dasBlogSettings);
 					archiveItem.Category = category;
-					if (viewModel.Items.ContainsKey(category))
+					if (viewModel.Categories.ContainsKey(category))
 					{
-						viewModel.Items[category].Add(archiveItem);
+						viewModel.Categories[category].Add(archiveItem);
 						continue;
 					}
 
-					viewModel.Items[category] = new List<CategoryListItem> { archiveItem };
+					viewModel.Categories[category] = new List<CategoryPostItem> { archiveItem };
 				}
 			}
-
+			
 			return viewModel;
-		}
-
-		public class CategoryListItem
-		{
-			public string Category { get; set; }
-
-			public string BlogTitle { get; set; }
-
-			public string BlogId { get; set; }
-
-			public static CategoryListItem CreateFromEntry(Entry entry)
-			{
-				return new CategoryListItem
-				{
-					Category = entry.GetSplitCategories().FirstOrDefault(),
-					BlogTitle = entry.Title,
-					BlogId = entry.EntryId
-				};
-			}
 		}
 	}
 }

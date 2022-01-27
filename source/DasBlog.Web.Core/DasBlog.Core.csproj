@@ -1,21 +1,27 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>AnyCPU</Platforms>
+    <Version>3.0.0</Version>
   </PropertyGroup>
-
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <NoWarn>1701;1702;NU1701</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Settings\**" />
+    <EmbeddedResource Remove="Settings\**" />
+    <None Remove="Settings\**" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\newtelligence.DasBlog.Runtime\newtelligence.DasBlog.Runtime.csproj" />
-    <ProjectReference Include="..\newtelligence.DasBlog.Web.Core\newtelligence.DasBlog.Web.Core.csproj" />
-    <ProjectReference Include="..\newtelligence.DasBlog.Web.Services\newtelligence.DasBlog.Web.Services.csproj" />
   </ItemGroup>
-
   <ItemGroup>
-    <Folder Include="Settings\" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="6.0.0" />
+    <PackageReference Include="NodaTime" Version="3.0.9" />
+    <PackageReference Include="NetEscapades.Extensions.Logging.RollingFile" Version="2.4.1" />
   </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="xmlrpcnet" Version="2.5.0" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
-
 </Project>

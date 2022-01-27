@@ -1,8 +1,45 @@
-﻿using CookComputing.XmlRpc;
-using DasBlog.Core;
+﻿#region Copyright (c) 2003, newtelligence AG. All rights reserved.
+/*
+// Copyright (c) 2003, newtelligence AG. (http://www.newtelligence.com)
+// Original BlogX Source Code: Copyright (c) 2003, Chris Anderson (http://simplegeek.com)
+// All rights reserved.
+//  
+// Redistribution and use in source and binary forms, with or without modification, are permitted 
+// provided that the following conditions are met: 
+//  
+// (1) Redistributions of source code must retain the above copyright notice, this list of 
+// conditions and the following disclaimer. 
+// (2) Redistributions in binary form must reproduce the above copyright notice, this list of 
+// conditions and the following disclaimer in the documentation and/or other materials 
+// provided with the distribution. 
+// (3) Neither the name of the newtelligence AG nor the names of its contributors may be used 
+// to endorse or promote products derived from this software without specific prior 
+// written permission.
+//      
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS 
+// OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY 
+// AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR 
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER 
+// IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT 
+// OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// -------------------------------------------------------------------------
+//
+// Original BlogX source code (c) 2003 by Chris Anderson (http://simplegeek.com)
+// 
+// newtelligence is a registered trademark of newtelligence Aktiengesellschaft.
+// 
+// For portions of this software, the some additional copyright notices may apply 
+// which can either be found in the license.txt file included in the source distribution
+// or following this notice. 
+//
+*/
+#endregion
+
 using DasBlog.Managers.Interfaces;
 using DasBlog.Core.Exceptions;
-using DasBlog.Core.Security;
+using DasBlog.Services;
 using newtelligence.DasBlog.Runtime;
 using System;
 using System.Collections.Generic;
@@ -10,35 +47,40 @@ using System.IO;
 using System.Reflection;
 using System.Security;
 using System.Text;
-using Blogger = DasBlog.Core.XmlRpc.Blogger;
-using MoveableType = DasBlog.Core.XmlRpc.MoveableType;
-using MetaWeblog = DasBlog.Core.XmlRpc.MetaWeblog;
+using Blogger = DasBlog.Services.XmlRpc.Blogger;
+using MoveableType = DasBlog.Services.XmlRpc.MoveableType;
+using MetaWeblog = DasBlog.Services.XmlRpc.MetaWeblog;
+using CookComputing.XmlRpc;
+using System.Net;
 
 namespace DasBlog.Managers
 {
 	[XmlRpcService(Name = "DasBlog Blogger Access Point", Description = "Implementation of Blogger XML-RPC Api")]
 	public class XmlRpcManager : IXmlRpcManager, MoveableType.IMovableType, Blogger.IBlogger, MetaWeblog.IMetaWeblog
 	{
-		private IBlogDataService _dataService;
-		private ILoggingDataService _loggingDataService;
-		private ISiteSecurityManager _siteSecurityManager;
-		private readonly IDasBlogSettings _dasBlogSettings;
+		private readonly IBlogDataService dataService;
+		private readonly ISiteSecurityManager siteSecurityManager;
+		private readonly ILoggingDataService loggingDataService;
+		private readonly IDasBlogSettings dasBlogSettings;
+		private readonly IFileSystemBinaryManager binaryManager;
 
-		public XmlRpcManager(IDasBlogSettings settings, ISiteSecurityManager siteSecurityManager)
+		public XmlRpcManager(IDasBlogSettings dasBlogSettings, ISiteSecurityManager siteSecurityManager, IFileSystemBinaryManager binaryManager)
 		{
-			_dasBlogSettings = settings;
-			_siteSecurityManager = siteSecurityManager;
-			_loggingDataService = LoggingDataServiceFactory.GetService(_dasBlogSettings.WebRootDirectory + _dasBlogSettings.SiteConfiguration.LogDir);
-			_dataService = BlogDataServiceFactory.GetService(_dasBlogSettings.WebRootDirectory + _dasBlogSettings.SiteConfiguration.ContentDir, _loggingDataService);
+			this.dasBlogSettings = dasBlogSettings;
+			this.siteSecurityManager = siteSecurityManager;
+			this.binaryManager = binaryManager;
+
+			loggingDataService = LoggingDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.LogDir));
+			dataService = BlogDataServiceFactory.GetService(Path.Combine(dasBlogSettings.WebRootDirectory, dasBlogSettings.SiteConfiguration.ContentDir), loggingDataService);
 		}
 
 		public string Invoke(Stream requestStream)
 		{
 			try
 			{
-				XmlRpcSerializer xmlRpcSerializer = new XmlRpcSerializer();
+				var xmlRpcSerializer = new XmlRpcSerializer();
 
-				XmlRpcServiceAttribute xmlRpcServiceAttribute = (XmlRpcServiceAttribute)Attribute.GetCustomAttribute(this.GetType(), typeof(XmlRpcServiceAttribute));
+				var xmlRpcServiceAttribute = (XmlRpcServiceAttribute)Attribute.GetCustomAttribute(this.GetType(), typeof(XmlRpcServiceAttribute));
 				if (xmlRpcServiceAttribute != null)
 				{
 					if (xmlRpcServiceAttribute.XmlEncoding != null)
@@ -54,24 +96,26 @@ namespace DasBlog.Managers
 				var bodyStream = new StreamReader(requestStream);
 				bodyStream.BaseStream.Seek(0, SeekOrigin.Begin);
 
-				XmlRpcRequest request = xmlRpcSerializer.DeserializeRequest(bodyStream, this.GetType());
-				XmlRpcResponse response = this.Invoke(request);
+				var request = xmlRpcSerializer.DeserializeRequest(bodyStream, this.GetType());
+				var response = Invoke(request);
 				Stream stream = new MemoryStream();
 				xmlRpcSerializer.SerializeResponse(stream, response);
 				stream.Seek(0L, SeekOrigin.Begin);
 
-				StreamReader reader = new StreamReader(stream);
+				var reader = new StreamReader(stream);
 				return reader.ReadToEnd();
 			}
 			catch (Exception ex)
 			{
-				XmlRpcFaultException faultEx = (!(ex is XmlRpcException)) ? ((!(ex is XmlRpcFaultException)) ? new XmlRpcFaultException(0, ex.Message) : ((XmlRpcFaultException)ex)) : new XmlRpcFaultException(0, ((XmlRpcException)ex).Message);
-				XmlRpcSerializer xmlRpcSerializer2 = new XmlRpcSerializer();
+				loggingDataService.AddEvent(new EventDataItem(EventCodes.Error, ex.Message, "XmlRpcManager.Invoke"));
+
+				var faultEx = (!(ex is XmlRpcException)) ? ((!(ex is XmlRpcFaultException)) ? new XmlRpcFaultException(0, ex.Message) : ((XmlRpcFaultException)ex)) : new XmlRpcFaultException(0, ((XmlRpcException)ex).Message);
+				var xmlRpcSerializer2 = new XmlRpcSerializer();
 				Stream stream2 = new MemoryStream();
 				xmlRpcSerializer2.SerializeFaultResponse(stream2, faultEx);
 				stream2.Seek(0L, SeekOrigin.Begin);
 
-				StreamReader reader2 = new StreamReader(stream2);
+				var reader2 = new StreamReader(stream2);
 				return reader2.ReadToEnd();
 			}
 		}
@@ -79,7 +123,7 @@ namespace DasBlog.Managers
 		private XmlRpcResponse Invoke(XmlRpcRequest request)
 		{
 			MethodInfo methodInfo = null;
-			methodInfo = (((object)request.mi == null) ? base.GetType().GetMethod(request.method) : request.mi);
+			methodInfo = ((request.mi is null) ? base.GetType().GetMethod(request.method) : request.mi);
 			object retValue;
 			try
 			{
@@ -87,6 +131,8 @@ namespace DasBlog.Managers
 			}
 			catch (Exception ex)
 			{
+				loggingDataService.AddEvent(new EventDataItem(EventCodes.Error, ex.Message, "XmlRpcManager.Invoke"));
+
 				if (ex.InnerException != null)
 				{
 					throw ex.InnerException;
@@ -98,46 +144,30 @@ namespace DasBlog.Managers
 
 		public MoveableType.Category[] mt_getCategoryList(string blogid, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
-
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
+			VerifyAccess(username, password);
 
 			return InternalGetCategoryList();
 		}
 
 		public MoveableType.Category[] mt_getPostCategories(string postid, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			MoveableType.Category[] mcats = InternalGetCategoryList();
-			Entry entry = _dataService.GetEntry(postid);
+			var mcats = InternalGetCategoryList();
+			var entry = dataService.GetEntry(postid);
 			if (entry != null)
 			{
-				List<MoveableType.Category> acats = new List<MoveableType.Category>();
-				string[] cats = entry.GetSplitCategories();
+				var acats = new List<MoveableType.Category>();
+				var cats = entry.GetSplitCategories();
 				if (cats.Length > 0)
 				{
-					foreach (string cat in cats)
+					foreach (var cat in cats)
 					{
-						foreach (MoveableType.Category mcat in mcats)
+						foreach (var mcat in mcats)
 						{
 							if (cat == mcat.categoryId)
 							{
-								MoveableType.Category cpcat = mcat;
+								var cpcat = mcat;
 								cpcat.isPrimary = (acats.Count == 0);
 								acats.Add(cpcat);
 								break;
@@ -159,22 +189,14 @@ namespace DasBlog.Managers
 
 		public MoveableType.PostTitle[] mt_getRecentPostTitles(string blogid, string username, string password, int numberOfPosts)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			EntryCollection entries = _dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), TimeZone.CurrentTimeZone, null,
-				_dasBlogSettings.SiteConfiguration.RssDayCount, numberOfPosts, null);
-			List<MoveableType.PostTitle> arrayList = new List<MoveableType.PostTitle>();
+			var entries = dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), dasBlogSettings.GetConfiguredTimeZone(), null,
+														numberOfPosts, numberOfPosts, null);
+			var arrayList = new List<MoveableType.PostTitle>();
 			foreach (Entry entry in entries)
 			{
-				MoveableType.PostTitle post = new MoveableType.PostTitle();
+				var post = new MoveableType.PostTitle();
 				post.title = NoNull(entry.Title);
 				post.dateCreated = entry.CreatedUtc;
 				post.postid = NoNull(entry.EntryId);
@@ -186,16 +208,17 @@ namespace DasBlog.Managers
 
 		public MoveableType.TrackbackPing[] mt_getTrackbackPings(string postid)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
+			if (!dasBlogSettings.SiteConfiguration.EnableBloggerApi)
 			{
+				loggingDataService.AddEvent(new EventDataItem(EventCodes.Error, "BloggerApi disabled", "XmlRpcManager.mt_getTrackbackPings"));
 				throw new ServiceDisabledException();
 			}
-			List<MoveableType.TrackbackPing> arrayList = new List<MoveableType.TrackbackPing>();
-			foreach (Tracking trk in _dataService.GetTrackingsFor(postid))
+			var arrayList = new List<MoveableType.TrackbackPing>();
+			foreach (Tracking trk in dataService.GetTrackingsFor(postid))
 			{
 				if (trk.TrackingType == TrackingType.Trackback)
 				{
-					MoveableType.TrackbackPing tp = new MoveableType.TrackbackPing();
+					var tp = new MoveableType.TrackbackPing();
 					tp.pingIP = "";
 					tp.pingTitle = NoNull(trk.RefererTitle);
 					tp.pingURL = NoNull(trk.PermaLink);
@@ -207,43 +230,27 @@ namespace DasBlog.Managers
 
 		public bool mt_publishPost(string postid, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
-
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
+			VerifyAccess(username, password);
 
 			return true;
 		}
 
 		public bool mt_setPostCategories(string postid, string username, string password, MoveableType.Category[] categories)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			Entry entry = _dataService.GetEntryForEdit(postid);
+			var entry = dataService.GetEntryForEdit(postid);
 			if (entry != null)
 			{
-				string cats = "";
-				foreach (MoveableType.Category mcat in categories)
+				var cats = "";
+				foreach (var mcat in categories)
 				{
 					if (cats.Length > 0)
 						cats += ";";
 					cats += mcat.categoryId;
 				}
 				entry.Categories = cats;
-				_dataService.SaveEntry(entry);
+				dataService.SaveEntry(entry);
 
 				return true;
 			}
@@ -255,39 +262,45 @@ namespace DasBlog.Managers
 
 		public string[] mt_supportedMethods()
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
+			if (!dasBlogSettings.SiteConfiguration.EnableBloggerApi)
 			{
+				loggingDataService.AddEvent(new EventDataItem(EventCodes.Error, "BloggerApi disabled", "XmlRpcManager.mt_supportedMethods"));
 				throw new ServiceDisabledException();
 			}
-			List<string> arrayList = new List<string>();
-			arrayList.Add("mt.getCategoryList");
-			arrayList.Add("mt.getPostCategories");
-			arrayList.Add("mt.getRecentPostTitles");
-			arrayList.Add("mt.getTrackbackPings");
-			arrayList.Add("mt.publishPost");
-			arrayList.Add("mt.setPostCategories");
-			arrayList.Add("mt.supportedMethods");
-			arrayList.Add("mt.supportedTextFilters");
+			var arrayList = new List<string>
+			{
+				"mt.getCategoryList",
+				"mt.getPostCategories",
+				"mt.getRecentPostTitles",
+				"mt.getTrackbackPings",
+				"mt.publishPost",
+				"mt.setPostCategories",
+				"mt.supportedMethods",
+				"mt.supportedTextFilters"
+			};
 
 			return arrayList.ToArray();
 		}
 
 		public MoveableType.TextFilter[] mt_supportedTextFilters()
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
+			if (!dasBlogSettings.SiteConfiguration.EnableBloggerApi)
 			{
+				loggingDataService.AddEvent(new EventDataItem(EventCodes.Error, "BloggerApi disabled", "XmlRpcManager.mt_supportedTextFilters"));
 				throw new ServiceDisabledException();
 			}
-			MoveableType.TextFilter tf = new MoveableType.TextFilter();
-			tf.key = "default";
-			tf.@value = "default";
+			var tf = new MoveableType.TextFilter
+			{
+				key = "default",
+				@value = "default"
+			};
 			return new MoveableType.TextFilter[] { tf };
 		}
 
 		public MoveableType.Category[] InternalGetCategoryList()
 		{
-			List<MoveableType.Category> arrayList = new List<MoveableType.Category>();
-			CategoryCacheEntryCollection categories = _dataService.GetCategories();
+			var arrayList = new List<MoveableType.Category>();
+			var categories = dataService.GetCategories();
 			if (categories.Count == 0)
 			{
 				arrayList.Add(InternalGetFrontPageCategory());
@@ -296,9 +309,11 @@ namespace DasBlog.Managers
 			{
 				foreach (CategoryCacheEntry catEntry in categories)
 				{
-					MoveableType.Category category = new MoveableType.Category();
-					category.categoryId = NoNull(catEntry.Name);
-					category.categoryName = NoNull(catEntry.Name);
+					var category = new MoveableType.Category
+					{
+						categoryId = NoNull(catEntry.Name),
+						categoryName = NoNull(catEntry.Name)
+					};
 					//category.isPrimary=false;
 					arrayList.Add(category);
 				}
@@ -308,9 +323,11 @@ namespace DasBlog.Managers
 
 		private MoveableType.Category InternalGetFrontPageCategory()
 		{
-			MoveableType.Category mcat = new MoveableType.Category();
-			mcat.categoryId = "Front Page";
-			mcat.categoryName = "Front Page";
+			var mcat = new MoveableType.Category
+			{
+				categoryId = "Front Page",
+				categoryName = "Front Page"
+			};
 			//mcat.isPrimary = true;
 			return mcat;
 		}
@@ -325,98 +342,69 @@ namespace DasBlog.Managers
 
 		public bool blogger_deletePost(string appKey, string postid, string username, string password, [XmlRpcParameter(Description = "Where applicable, this specifies whether the blog should be republished after the post has been deleted.")] bool publish)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			_dataService.DeleteEntry(postid, null);
+			dataService.DeleteEntry(postid, null);
 
 			return true;
 		}
 
 		public bool blogger_editPost(string appKey, string postid, string username, string password, string content, bool publish)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			Entry entry = _dataService.GetEntryForEdit(postid);
+			var entry = dataService.GetEntryForEdit(postid);
 			if (entry != null)
 			{
 				FillEntryFromBloggerPost(entry, content, username);
 				entry.IsPublic = publish;
 				entry.Syndicated = publish;
 
-				_dataService.SaveEntry(entry);
+				dataService.SaveEntry(entry);
 			}
 			return true;
 		}
 
 		public Blogger.Category[] blogger_getCategories(string blogid, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			List<Blogger.Category> arrayList = new List<Blogger.Category>();
-			CategoryCacheEntryCollection categories = _dataService.GetCategories();
+			var arrayList = new List<Blogger.Category>();
+			var categories = dataService.GetCategories();
 			if (categories.Count == 0)
 			{
-				Blogger.Category bcat = new Blogger.Category();
+				var bcat = new Blogger.Category();
 				bcat.categoryid = "Front Page";
 				bcat.description = "Front Page";
-				bcat.htmlUrl = _dasBlogSettings.GetCategoryViewUrl(bcat.categoryid);
-				bcat.rssUrl = _dasBlogSettings.GetCategoryViewUrl(bcat.categoryid);
+				bcat.htmlUrl = dasBlogSettings.GetCategoryViewUrl(bcat.categoryid);
+				bcat.rssUrl = dasBlogSettings.GetCategoryViewUrl(bcat.categoryid);
 				bcat.title = NoNull(bcat.description);
 				arrayList.Add(bcat);
 			}
-			else foreach (CategoryCacheEntry cat in categories)
+			else
+			{
+				foreach (CategoryCacheEntry cat in categories)
 				{
-					Blogger.Category bcat = new Blogger.Category();
+					var bcat = new Blogger.Category();
 					bcat.categoryid = NoNull(cat.Name);
 					bcat.description = NoNull(cat.Name);
-					bcat.htmlUrl = _dasBlogSettings.GetCategoryViewUrl(cat.Name);
-					bcat.rssUrl = _dasBlogSettings.GetCategoryViewUrl(cat.Name);  //Should this be GetRssCategoryUrl()
+					bcat.htmlUrl = dasBlogSettings.GetCategoryViewUrl(cat.Name);
+					bcat.rssUrl = dasBlogSettings.GetCategoryViewUrl(cat.Name);  //Should this be GetRssCategoryUrl()
 					bcat.title = NoNull(cat.Name);
 					arrayList.Add(bcat);
 				}
+			}
 			return arrayList.ToArray();
 		}
 
 		public Blogger.Post blogger_getPost(string appKey, string postid, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			Entry entry = _dataService.GetEntry(postid);
+			var entry = dataService.GetEntry(postid);
 			if (entry != null)
 			{
-				Blogger.Post post = new Blogger.Post();
+				var post = new Blogger.Post();
 				FillBloggerPostFromEntry(entry, ref post);
 				return post;
 			}
@@ -428,22 +416,14 @@ namespace DasBlog.Managers
 
 		public Blogger.Post[] blogger_getRecentPosts(string appKey, string blogid, string username, string password, int numberOfPosts)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			EntryCollection entries = _dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), _dasBlogSettings.GetConfiguredTimeZone(),
-											null, _dasBlogSettings.SiteConfiguration.RssDayCount, numberOfPosts, null);
-			List<Blogger.Post> arrayList = new List<Blogger.Post>();
+			var entries = dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), dasBlogSettings.GetConfiguredTimeZone(),
+											null, numberOfPosts, numberOfPosts, null);
+			var arrayList = new List<Blogger.Post>();
 			foreach (Entry entry in entries)
 			{
-				Blogger.Post post = new Blogger.Post();
+				var post = new Blogger.Post();
 				FillBloggerPostFromEntry(entry, ref post);
 				arrayList.Add(post);
 			}
@@ -452,36 +432,20 @@ namespace DasBlog.Managers
 
 		public string blogger_getTemplate(string appKey, string blogid, string username, string password, string templateType)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
-
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
+			VerifyAccess(username, password);
 
 			return "";
 		}
 
 		public Blogger.UserInfo blogger_getUserInfo(string appKey, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			User user = _siteSecurityManager.GetUser(username);
-			Blogger.UserInfo userInfo = new Blogger.UserInfo();
+			var user = siteSecurityManager.GetUser(username);
+			var userInfo = new Blogger.UserInfo();
 
 			userInfo.email = NoNull(user.EmailAddress);
-			userInfo.url = NoNull(_dasBlogSettings.SiteConfiguration.Root);
+			userInfo.url = NoNull(dasBlogSettings.SiteConfiguration.Root);
 			userInfo.firstname = "";
 			userInfo.lastname = "";
 			userInfo.nickname = NoNull(user.DisplayName);
@@ -490,59 +454,39 @@ namespace DasBlog.Managers
 
 		public Blogger.BlogInfo[] blogger_getUsersBlogs(string appKey, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
+			var blogs = new Blogger.BlogInfo[1];
+			var blog = new Blogger.BlogInfo
 			{
-				throw new SecurityException();
-			}
-
-			Blogger.BlogInfo[] blogs = new Blogger.BlogInfo[1];
-			Blogger.BlogInfo blog = new Blogger.BlogInfo();
-			blog.blogid = "0";
-			blog.blogName = NoNull(_dasBlogSettings.SiteConfiguration.Title);
-			blog.url = NoNull(_dasBlogSettings.SiteConfiguration.Root);
+				blogid = "0",
+				blogName = NoNull(dasBlogSettings.SiteConfiguration.Title),
+				url = NoNull(dasBlogSettings.SiteConfiguration.Root)
+			};
 			blogs[0] = blog;
 			return blogs;
 		}
 
 		public string blogger_newPost(string appKey, string blogid, string username, string password, string content, bool publish)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			Entry newPost = new Entry();
+			var newPost = new Entry();
 			newPost.Initialize();
 			FillEntryFromBloggerPost(newPost, content, username);
 			newPost.IsPublic = publish;
 			newPost.Syndicated = publish;
 
-			_dataService.SaveEntry(newPost);
+			newPost.CreatedUtc = newPost.ModifiedUtc = dasBlogSettings.GetCreateTime(newPost.CreatedUtc);
+
+			dataService.SaveEntry(newPost);
 
 			return newPost.EntryId;
 		}
 
 		public bool blogger_setTemplate(string appKey, string blogid, string username, string password, string template, string templateType)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
-
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
+			VerifyAccess(username, password);
 
 			return false;
 		}
@@ -585,17 +529,9 @@ namespace DasBlog.Managers
 
 		public bool metaweblog_editPost(string postid, string username, string password, MetaWeblog.Post post, bool publish)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			Entry entry = _dataService.GetEntryForEdit(postid);
+			Entry entry = dataService.GetEntryForEdit(postid);
 			if (entry != null)
 			{
 				entry.Author = username;
@@ -604,32 +540,24 @@ namespace DasBlog.Managers
 				entry.IsPublic = publish;
 				entry.Syndicated = publish;
 
-				_dataService.SaveEntry(entry);
+				dataService.SaveEntry(entry);
 			}
 			return true;
 		}
 
 		public MetaWeblog.CategoryInfo[] metaweblog_getCategories(string blogid, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			List<MetaWeblog.CategoryInfo> arrayList = new List<MetaWeblog.CategoryInfo>();
-			CategoryCacheEntryCollection categories = _dataService.GetCategories();
+			var arrayList = new List<MetaWeblog.CategoryInfo>();
+			var categories = dataService.GetCategories();
 			if (categories.Count == 0)
 			{
-				MetaWeblog.CategoryInfo bcat = new MetaWeblog.CategoryInfo();
+				var bcat = new MetaWeblog.CategoryInfo();
 				bcat.categoryid = "Front Page";
 				bcat.description = "Front Page";
-				bcat.htmlUrl = _dasBlogSettings.GetCategoryViewUrl(bcat.categoryid);
-				bcat.rssUrl = _dasBlogSettings.GetRssCategoryUrl(bcat.categoryid);
+				bcat.htmlUrl = dasBlogSettings.GetCategoryViewUrl(bcat.categoryid);
+				bcat.rssUrl = dasBlogSettings.GetRssCategoryUrl(bcat.categoryid);
 				bcat.title = NoNull(bcat.description);
 				arrayList.Add(bcat);
 			}
@@ -637,11 +565,11 @@ namespace DasBlog.Managers
 			{
 				foreach (CategoryCacheEntry cat in categories)
 				{
-					MetaWeblog.CategoryInfo bcat = new MetaWeblog.CategoryInfo();
+					var bcat = new MetaWeblog.CategoryInfo();
 					bcat.categoryid = NoNull(cat.Name);
 					bcat.description = NoNull(cat.Name);
-					bcat.htmlUrl = _dasBlogSettings.GetCategoryViewUrl(cat.Name);
-					bcat.rssUrl = _dasBlogSettings.GetRssCategoryUrl(cat.Name);
+					bcat.htmlUrl = dasBlogSettings.GetCategoryViewUrl(cat.Name);
+					bcat.rssUrl = dasBlogSettings.GetRssCategoryUrl(cat.Name);
 					bcat.title = NoNull(cat.Name);
 					arrayList.Add(bcat);
 				}
@@ -651,17 +579,9 @@ namespace DasBlog.Managers
 
 		public MetaWeblog.Post metaweblog_getPost(string postid, string username, string password)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			Entry entry = _dataService.GetEntry(postid);
+			Entry entry = dataService.GetEntry(postid);
 			if (entry != null)
 			{
 				return this.Create(entry);
@@ -674,19 +594,11 @@ namespace DasBlog.Managers
 
 		public MetaWeblog.Post[] metaweblog_getRecentPosts(string blogid, string username, string password, int numberOfPosts)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			EntryCollection entries = _dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), _dasBlogSettings.GetConfiguredTimeZone(), null,
-														_dasBlogSettings.SiteConfiguration.RssDayCount, numberOfPosts, null);
-			List<MetaWeblog.Post> arrayList = new List<MetaWeblog.Post>();
+			var entries = dataService.GetEntriesForDay(DateTime.Now.ToUniversalTime(), dasBlogSettings.GetConfiguredTimeZone(), null,
+														numberOfPosts, numberOfPosts, null);
+			var arrayList = new List<MetaWeblog.Post>();
 			foreach (Entry entry in entries)
 			{
 				arrayList.Add(this.Create(entry));
@@ -696,70 +608,37 @@ namespace DasBlog.Managers
 
 		public string metaweblog_newPost(string blogid, string username, string password, MetaWeblog.Post post, bool publish)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
-
-			Entry newPost = new Entry();
+			var newPost = new Entry();
 			newPost.Initialize();
 			newPost.Author = username;
 
-			TrackbackInfoCollection trackbackList = FillEntryFromMetaWeblogPost(newPost, post);
+			var trackbackList = FillEntryFromMetaWeblogPost(newPost, post);
+
+			newPost.CreatedUtc = newPost.ModifiedUtc = dasBlogSettings.GetCreateTime(newPost.CreatedUtc);
 
 			newPost.IsPublic = publish;
 			newPost.Syndicated = publish;
 
-			_dataService.SaveEntry(newPost);
+			dataService.SaveEntry(newPost);
 
 			return newPost.EntryId;
 		}
 
 		public MetaWeblog.UrlInfo metaweblog_newMediaObject(object blogid, string username, string password, MetaWeblog.MediaType enc)
 		{
-			if (!_dasBlogSettings.SiteConfiguration.EnableBloggerApi)
-			{
-				throw new ServiceDisabledException();
-			}
+			VerifyAccess(username, password);
 
-			if (!VerifyLogin(username, password))
-			{
-				throw new SecurityException();
-			}
+			Stream stream = new MemoryStream(enc.bits);
 
-			// Get the binary data
-			string strPath = Path.Combine(_dasBlogSettings.RelativeToRoot(_dasBlogSettings.SiteConfiguration.BinariesDir), enc.name);
+			var filePath = binaryManager.SaveFile(stream, enc.name);
 
-			// check if the name of the media type includes a subdirectory we need to create
-			FileInfo fileInfo = new FileInfo(strPath);
-			if (fileInfo.Directory.Exists == false && fileInfo.Directory.FullName != _dasBlogSettings.RelativeToRoot(_dasBlogSettings.SiteConfiguration.BinariesDir))
+			var urlInfo = new MetaWeblog.UrlInfo
 			{
-				fileInfo.Directory.Create();
-			}
+				url = filePath
+			};
 
-			try
-			{
-				using (FileStream fs = new FileStream(strPath, FileMode.OpenOrCreate))
-				{
-					using (BinaryWriter bw = new BinaryWriter(fs))
-					{
-						bw.Write(enc.bits);
-					}
-				}
-			}
-			catch (Exception e)
-			{
-				throw new XmlRpcException(e.ToString());
-			}
-
-			string path = Path.Combine(_dasBlogSettings.SiteConfiguration.BinariesDirRelative, enc.name);
-			MetaWeblog.UrlInfo urlInfo = new MetaWeblog.UrlInfo();
-			urlInfo.url = _dasBlogSettings.RelativeToRoot(path);
 			return urlInfo;
 		}
 
@@ -777,7 +656,7 @@ namespace DasBlog.Managers
 			}
 
 			//Patched to avoid html entities in title
-			entry.Title = post.title; // TODO: Find out how to decode this...  HttpUtility.HtmlDecode(post.title);
+			entry.Title = WebUtility.HtmlDecode(post.title);
 			entry.Content = post.description;
 			entry.Description = NoNull(post.mt_excerpt);
 
@@ -794,10 +673,10 @@ namespace DasBlog.Managers
 			if (post.categories != null && post.categories.Length > 0)
 			{
 				// handle categories
-				string categories = "";
+				var categories = "";
 
-				StringBuilder sb = new StringBuilder();
-				bool needSemi = false;
+				var sb = new StringBuilder();
+				var needSemi = false;
 				post.categories = RemoveDups(post.categories, true);
 				foreach (string category in post.categories)
 				{
@@ -816,19 +695,19 @@ namespace DasBlog.Managers
 			}
 
 			// We'll always return at least an empty collection
-			TrackbackInfoCollection trackbackList = new TrackbackInfoCollection();
+			var trackbackList = new TrackbackInfoCollection();
 
 			// Only MT supports trackbacks in the post
 			if (post.mt_tb_ping_urls != null)
 			{
-				foreach (string trackbackUrl in post.mt_tb_ping_urls)
+				foreach (var trackbackUrl in post.mt_tb_ping_urls)
 				{
 					trackbackList.Add(new TrackbackInfo(
 						trackbackUrl,
-						_dasBlogSettings.GetPermaLinkUrl(entry.EntryId),
+						dasBlogSettings.GetPermaLinkUrl(entry.EntryId),
 						entry.Title,
 						entry.Description,
-						_dasBlogSettings.SiteConfiguration.Title));
+						dasBlogSettings.SiteConfiguration.Title));
 				}
 			}
 			return trackbackList;
@@ -836,8 +715,8 @@ namespace DasBlog.Managers
 
 		private string[] RemoveDups(string[] items, bool sort)
 		{
-			List<string> noDups = new List<string>();
-			for (int i = 0; i < items.Length; i++)
+			var noDups = new List<string>();
+			for (var i = 0; i < items.Length; i++)
 			{
 				if (!noDups.Contains(items[i].Trim()))
 				{
@@ -845,30 +724,46 @@ namespace DasBlog.Managers
 				}
 			}
 			if (sort) noDups.Sort();  //sorts list alphabetically
-			string[] uniqueItems = new string[noDups.Count];
+			var uniqueItems = new string[noDups.Count];
 			noDups.CopyTo(uniqueItems);
 			return uniqueItems;
 		}
 
 		private MetaWeblog.Post Create(Entry entry)
 		{
-			if (entry == null) throw new ArgumentNullException("entry");
+			if (entry == null) throw new ArgumentNullException(nameof(entry));
 
-			MetaWeblog.Post post = new MetaWeblog.Post();
+			var post = new MetaWeblog.Post();
 			post.description = entry.Content ?? "";
 			post.mt_excerpt = entry.Description ?? "";
 			post.dateCreated = entry.CreatedUtc;
 			post.title = entry.Title ?? "";
-			post.link = post.permalink = _dasBlogSettings.GetPermaLinkUrl(entry.EntryId);
+			post.link = post.permalink = dasBlogSettings.GetPermaLinkUrl(entry.EntryId);
 			post.postid = entry.EntryId ?? "";
 			post.categories = entry.GetSplitCategories();
+			post.mt_text_more = "";
 			return post;
 		}
 
 		private bool VerifyLogin(string username, string password)
 		{
-			var user =_siteSecurityManager.GetUser(username);
-			return _siteSecurityManager.VerifyHashedPassword(user.Password, password);
+			var user =siteSecurityManager.GetUser(username);
+			return siteSecurityManager.VerifyHashedPassword(user.Password, password);
+		}
+
+		private void VerifyAccess(string username, string password)
+		{
+			if (!dasBlogSettings.SiteConfiguration.EnableBloggerApi)
+			{
+				loggingDataService.AddEvent(new EventDataItem(EventCodes.Error, "BloggerApi disabled", "XmlRpcManager.VerifyAccess"));
+				throw new ServiceDisabledException();
+			}
+
+			if (!VerifyLogin(username, password))
+			{
+				loggingDataService.AddEvent(new EventDataItem(EventCodes.Error, string.Format("Username password invalid: {0}", username), "XmlRpcManager.VerifyAccess"));
+				throw new SecurityException();
+			}
 		}
 	}
 }

@@ -1,32 +1,34 @@
-﻿using DasBlog.Core;
+﻿
 using DasBlog.Core.Security;
 using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
 using System;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text;
 
 namespace DasBlog.Managers
 {
 	public class SiteSecurityManager : ISiteSecurityManager
 	{
-		private HashAlgorithm _hashAlgorithm;
-		private IPrincipal _principal;
-		private IDasBlogSettings _dasBlogSettings;
+		private readonly IDasBlogSettings dasBlogSettings;
 
-		public SiteSecurityManager(IPrincipal principal, IDasBlogSettings dasBlogSettings)
+		public SiteSecurityManager( IDasBlogSettings dasBlogSettings)
 		{
-			_dasBlogSettings = dasBlogSettings;
-			_principal = principal;
-			_hashAlgorithm = SHA512Managed.Create();
+			this.dasBlogSettings = dasBlogSettings;
 		}
 
 		public string HashPassword(string password)
 		{
-			byte[] clearBytes = Encoding.Unicode.GetBytes(password);
+			var hashAlgorithm = SHA512Managed.Create();
+			return HashPassword(password, hashAlgorithm);
+		}
 
-			byte[] hashedBytes = _hashAlgorithm.ComputeHash(clearBytes);
+		private string HashPassword(string password, HashAlgorithm hashAlgorithm)
+		{
+			var clearBytes = Encoding.Unicode.GetBytes(password);
+
+			var hashedBytes = hashAlgorithm.ComputeHash(clearBytes);
 
 			return BitConverter.ToString(hashedBytes);
 		}
@@ -40,12 +42,13 @@ namespace DasBlog.Managers
 		{
 			string hashprovidedpassword = string.Empty;
 
+			HashAlgorithm hashAlgorithm = SHA512Managed.Create();
 			if (this.IsMd5Hash(hashedPassword))
 			{
-				_hashAlgorithm = MD5CryptoServiceProvider.Create();
+				hashAlgorithm = MD5CryptoServiceProvider.Create();
 			}
 
-			hashprovidedpassword = this.HashPassword(providedPassword);
+			hashprovidedpassword = HashPassword(providedPassword, hashAlgorithm);
 
 			if (hashedPassword.Equals(hashprovidedpassword, StringComparison.InvariantCultureIgnoreCase))
 			{
@@ -57,17 +60,17 @@ namespace DasBlog.Managers
 
 		public User GetUser(string userName)
 		{
-			return _dasBlogSettings.SecurityConfiguration.Users.FirstOrDefault(s => string.Compare(s.Name, userName, StringComparison.InvariantCultureIgnoreCase) == 0);
+			return dasBlogSettings.SecurityConfiguration.Users.FirstOrDefault(s => string.Compare(s.Name, userName, StringComparison.InvariantCultureIgnoreCase) == 0);
 		}
 
 		public User GetUserByDisplayName(string displayName)
 		{
-			return _dasBlogSettings.SecurityConfiguration.Users.FirstOrDefault(s => string.Compare(s.DisplayName, displayName, StringComparison.InvariantCultureIgnoreCase) == 0);
+			return dasBlogSettings.SecurityConfiguration.Users.FirstOrDefault(s => string.Compare(s.DisplayName, displayName, StringComparison.InvariantCultureIgnoreCase) == 0);
 		}
 
 		public User GetUserByEmail(string email)
 		{
-			return _dasBlogSettings.SecurityConfiguration.Users.FirstOrDefault(s => string.Compare(s.EmailAddress, email, StringComparison.InvariantCultureIgnoreCase) == 0);
+			return dasBlogSettings.SecurityConfiguration.Users.FirstOrDefault(s => string.Compare(s.EmailAddress, email, StringComparison.InvariantCultureIgnoreCase) == 0);
 		}
 	}
 }

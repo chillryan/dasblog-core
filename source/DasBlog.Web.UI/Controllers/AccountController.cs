@@ -1,39 +1,38 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
-using AutoMapper;
-using DasBlog.Web.Models.AccountViewModels;
+﻿using AutoMapper;
+using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
+using DasBlog.Services.ActivityLogs;
 using DasBlog.Web.Identity;
+using DasBlog.Web.Models.AccountViewModels;
+using DasBlog.Web.Settings;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using DasBlog.Managers.Interfaces;
+using System.Threading.Tasks;
 
 namespace DasBlog.Web.Controllers
 {
 	[Authorize]
-	public class AccountController : Controller
+	public class AccountController : DasBlogBaseController
 	{
 		private const string KEY_RETURNURL = "ReturnUrl";
-		private readonly ILogger logger;
+		private readonly ILogger<AccountController> logger;
 		private readonly IMapper mapper;
 		private readonly SignInManager<DasBlogUser> signInManager;
 		private readonly UserManager<DasBlogUser> userManager;
+		private const string LOGIN = "Login";
 
-		public AccountController(
-			UserManager<DasBlogUser> userManager,
-			SignInManager<DasBlogUser> signInManager,
-			IMapper mapper,
-			ISiteSecurityManager siteSecurityManager,
-			ILoggerFactory loggerFactory)
+		public AccountController(UserManager<DasBlogUser> userManager, SignInManager<DasBlogUser> signInManager,
+							IMapper mapper, ISiteSecurityManager siteSecurityManager, ILogger<AccountController> logger, IDasBlogSettings settings) 
+							: base(settings)
 		{
 			this.signInManager = signInManager;
 			this.userManager = userManager;
 			this.userManager.PasswordHasher = new DasBlogPasswordHasher(siteSecurityManager);
-
+			this.logger = logger;
 			this.mapper = mapper;
-			logger = loggerFactory.CreateLogger<AccountController>();
 		}
 
 		[HttpGet]
@@ -44,6 +43,7 @@ namespace DasBlog.Web.Controllers
 			await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
 			ViewData[KEY_RETURNURL] = returnUrl;
+			DefaultPage(LOGIN);
 			return View();
 		}
 
@@ -59,8 +59,13 @@ namespace DasBlog.Web.Controllers
 
 				if (result.Succeeded)
 				{
+					logger.LogInformation(new EventDataItem(EventCodes.SecuritySuccess, null, 
+												"{email} logged in successfully", model.Email));
+
 					return LocalRedirect(returnUrl ?? Url.Action("Index", "Home"));
 				}
+				logger.LogInformation(new EventDataItem(EventCodes.SecuritySuccess, null, 
+												"{email} failed to log in", model.Email));
 
 				ModelState.AddModelError(string.Empty, "The username and/or password is incorrect. Please try again.");
 			}
@@ -68,15 +73,18 @@ namespace DasBlog.Web.Controllers
 			return View(model);
 		}
 
-		[HttpPost]
+		[HttpGet]
 		public async Task<IActionResult> Logout()
 		{
 			await signInManager.SignOutAsync();
+
+			logger.LogInformation(new EventDataItem(EventCodes.SecuritySuccess, null, "Logged out successfully"));
+
 			return RedirectToAction("Index", "Home");
 		}
 
 		[HttpGet]
-		public async Task<IActionResult> Register(string returnUrl)
+		public IActionResult Register(string returnUrl)
 		{
 			ViewData[KEY_RETURNURL] = returnUrl;
 
@@ -91,11 +99,7 @@ namespace DasBlog.Web.Controllers
 			{
 				var user = mapper.Map<DasBlogUser>(model);
 				var result = await userManager.CreateAsync(user, model.Password);
-				if (result.Succeeded)
-				{
-					// Success Notification
-				}
-				else
+				if (!result.Succeeded)
 				{
 					foreach (var item in result.Errors)
 					{

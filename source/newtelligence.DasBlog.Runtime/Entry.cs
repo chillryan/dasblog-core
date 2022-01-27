@@ -37,12 +37,13 @@
 */
 #endregion
 
+using NodaTime;
 using System;
 using System.Collections;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Text;
-using System.Web;
 using System.Xml;
 using System.Xml.Serialization;
 using System.Collections.Generic;
@@ -131,7 +132,7 @@ namespace newtelligence.DasBlog.Runtime
 		public string Categories
 		{
 			get { return _categories; }
-			set { _categories = value.TrimEnd(';'); }
+			set { _categories = string.IsNullOrWhiteSpace(value) ? string.Empty : value.TrimEnd(';'); }
 		}
 
 		public string Author
@@ -392,7 +393,12 @@ namespace newtelligence.DasBlog.Runtime
 				}
 			}
 
-			return HttpUtility.UrlEncode(retVal.ToString()).Replace("%2b", "+");
+			return WebUtility.UrlEncode(retVal.ToString()).Replace("%2b", "+", StringComparison.OrdinalIgnoreCase);
+		}
+
+		public static string InternalCompressTitle(string titleParam, string replacement)
+		{
+			return InternalCompressTitle(titleParam).Replace("+", replacement);
 		}
 
 		public string[] GetSplitCategories()
@@ -489,16 +495,22 @@ namespace newtelligence.DasBlog.Runtime
 		/// A value of true indicates the entry is in the category specified or, if the categoryName
 		/// is null or empty, return true if the entry is assigned no categories
 		/// </returns>
-		public static bool OccursBefore(Entry entry, TimeZone timeZone, DateTime dateTime)
+		public static bool OccursBefore(Entry entry, DateTimeZone timeZone, DateTime dateTime)
 		{
-			return (timeZone.ToLocalTime(entry.CreatedUtc) <= dateTime);
+			var entryCreated = timeZone.AtStrictly(LocalDateTime.FromDateTime(entry.CreatedUtc)).LocalDateTime;
+			var date = LocalDateTime.FromDateTime(dateTime);
+
+			return (entryCreated <= date);
 		}
 
-		public static bool OccursBetween(Entry entry, TimeZone timeZone,
-		                                 DateTime startDateTime, DateTime endDateTime)
+		public static bool OccursBetween(Entry entry, DateTimeZone timeZone, 
+												DateTime startDateTime, DateTime endDateTime)
 		{
-			return ((timeZone.ToLocalTime(entry.CreatedUtc) >= startDateTime)
-			        && (timeZone.ToLocalTime(entry.CreatedUtc) <= endDateTime));
+			var entryCreated = timeZone.AtStrictly(LocalDateTime.FromDateTime(entry.CreatedUtc)).LocalDateTime;
+			var strartDate = LocalDateTime.FromDateTime(startDateTime);
+			var endDate = LocalDateTime.FromDateTime(endDateTime);
+
+			return ((entryCreated >= strartDate) && (entryCreated <= endDate));
 		}
 
 		/// <summary>
@@ -508,15 +520,14 @@ namespace newtelligence.DasBlog.Runtime
 		/// <param name="timeZone"></param>
 		/// <param name="month"></param>
 		/// <returns></returns>
-		public static bool OccursInMonth(Entry entry, TimeZone timeZone,
+		public static bool OccursInMonth(Entry entry, DateTimeZone timeZone,
 		                                 DateTime month)
 		{
 			DateTime startOfMonth = new DateTime(month.Year, month.Month, 1, 0, 0, 0);
 			DateTime endOfMonth = new DateTime(month.Year, month.Month, 1, 0, 0, 0);
 			endOfMonth = endOfMonth.AddMonths(1);
 			endOfMonth = endOfMonth.AddSeconds(-1);
-			//TimeSpan offset = timeZone.GetUtcOffset(endOfMonth);
-			//endOfMonth = endOfMonth.AddHours(offset.Negate().Hours);
+
 			return (OccursBetween(entry, timeZone, startOfMonth, endOfMonth));
 		}
 

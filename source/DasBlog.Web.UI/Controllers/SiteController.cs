@@ -1,31 +1,63 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using System.Linq;
+using AutoMapper;
 using DasBlog.Managers.Interfaces;
+using DasBlog.Services.ActivityLogs;
+using DasBlog.Web.Models.BlogViewModels;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 namespace DasBlog.Web.Controllers
 {
-    [Produces("text/xml")]
     [Route("site")]
-    public class SiteController : Controller
+    public class SiteController : DasBlogController
     {
-        private ISiteManager _siteManager;
+        private readonly ISiteManager siteManager;
+		private readonly IBlogManager blogManager;
+		private readonly IMemoryCache memoryCache;
+		private readonly IMapper mapper;
+		private readonly ILogger<SiteController> logger;
 
-        public SiteController(ISiteManager siteManager)
+		public SiteController(ISiteManager siteManager, IBlogManager blogManager, IMemoryCache memoryCache, IMapper mapper, ILogger<SiteController> logger)
         {
-			_siteManager = siteManager;
-        }
+			this.siteManager = siteManager;
+			this.blogManager = blogManager;
+			this.memoryCache = memoryCache;
+			this.mapper = mapper;
+			this.logger = logger;
+		}
 
-        [Route("")]
+		[Produces("text/xml")]
+		[Route("")]
         [HttpGet("map")]
         public ActionResult Map()
         {
-            urlset sitemap = _siteManager.GetGoogleSiteMap();
+            var sitemap = siteManager.GetGoogleSiteMap();
 
-            return Ok(sitemap);
+			logger.LogInformation(new EventDataItem(EventCodes.Site, null, "Site Map request"));
+
+			return Ok(sitemap);
         }
-    }
+
+		[Produces("text/plain")]
+		[HttpGet("microsummary")]
+		public ActionResult MicroSummary()
+		{
+			if (!memoryCache.TryGetValue(CACHEKEY_FRONTPAGE, out ListPostsViewModel lpvm))
+			{
+				lpvm = new ListPostsViewModel
+				{
+					Posts = blogManager.GetFrontPagePosts(Request.Headers["Accept-Language"])
+								.Select(entry => mapper.Map<PostViewModel>(entry))
+								.Select(editentry => editentry).ToList()
+				};
+
+				memoryCache.Set(CACHEKEY_FRONTPAGE, lpvm, SiteCacheSettings());
+			};
+
+			logger.LogInformation(new EventDataItem(EventCodes.Site, null, "Microsummary request"));
+
+			return Ok(lpvm?.Posts.FirstOrDefault()?.Title);
+		}
+	}
 }

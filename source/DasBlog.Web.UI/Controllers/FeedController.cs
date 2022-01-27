@@ -1,84 +1,141 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
+using DasBlog.Services.ActivityLogs;
+using DasBlog.Services.Rss.Rss20;
+using DasBlog.Services.Rss.Rsd;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Primitives;
-using DasBlog.Managers.Interfaces;
-using newtelligence.DasBlog.Web.Services.Rss20;
-using Microsoft.AspNetCore.Http;
-using newtelligence.DasBlog.Web.Services.Rsd;
+using Microsoft.Extensions.Logging;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace DasBlog.Web.Controllers
 {
-    [Produces("text/xml")]
-    [Route("feed")]
-    public class FeedController : Controller
+    public class FeedController : DasBlogController
     {
-        private IMemoryCache _cache;
-        private ISubscriptionManager _subscriptionManager;
-        private const string RSS_CACHE_KEY = "RSS_CACHE_KEY";
+        private IMemoryCache memoryCache;
+        private readonly ISubscriptionManager subscriptionManager;
+		private readonly IXmlRpcManager xmlRpcManager;
+		private readonly IDasBlogSettings dasBlogSettings;
+		private readonly ILogger<FeedController> logger;
 
-        public FeedController(ISubscriptionManager subscriptionManager, IHttpContextAccessor httpContextAccessor, IMemoryCache memoryCache)
+		public FeedController(ISubscriptionManager subscriptionManager, IXmlRpcManager xmlRpcManager, 
+								IMemoryCache memoryCache, IDasBlogSettings dasBlogSettings, ILogger<FeedController> logger)
         {  
-            _subscriptionManager = subscriptionManager;
-            _cache = memoryCache;
-        }
+            this.subscriptionManager = subscriptionManager;
+			this.xmlRpcManager = xmlRpcManager;
+			this.memoryCache = memoryCache;
+			this.dasBlogSettings = dasBlogSettings;
+			this.logger = logger;
+		}
 
-        [Route("")]
-        [HttpGet("rss")]
+		[Produces("text/xml")]
+        [HttpGet("feed/rss"), HttpHead("feed/rss")]
         public IActionResult Rss()
         {
-            RssRoot rss = null; 
+			if (!memoryCache.TryGetValue(CACHEKEY_RSS, out RssRoot rss))
+			{
+				rss = subscriptionManager.GetRss();
 
-            if (!_cache.TryGetValue(RSS_CACHE_KEY, out rss))
-            {
-                rss = _subscriptionManager.GetRss();
+				memoryCache.Set(CACHEKEY_RSS, rss, SiteCacheSettings());
+			}
 
-                var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(5));
-
-                _cache.Set(RSS_CACHE_KEY, rss, cacheEntryOptions);
-            }
-
-            return Ok(rss);
+			return Ok(rss);
         }
 
-        [HttpGet("rss/{category}")]
+		[Produces("text/xml")]
+		[HttpGet("feed/rss/{category}"), HttpHead("feed/rss/{category}")]
         public IActionResult RssByCategory(string category)
         {
-            RssRoot rss = null;
+			if (!memoryCache.TryGetValue(CACHEKEY_RSS + "_" + category, out RssRoot rss))
+			{
+				rss = subscriptionManager.GetRssCategory(category);
 
-            if (!_cache.TryGetValue(RSS_CACHE_KEY + "_" + category, out rss))
-            {
-                rss = _subscriptionManager.GetRssCategory(category);
+				if (rss.Channels[0]?.Items?.Count > 0)
+				{
+					memoryCache.Set(CACHEKEY_RSS + "_" + category, rss, SiteCacheSettings());
+				}
+			}
 
-                var cacheEntryOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(5));
+			if(rss.Channels[0]?.Items?.Count == 0)
+			{
+				return NoContent();
+			}
 
-                _cache.Set(RSS_CACHE_KEY + "_" + category, rss, cacheEntryOptions);
-            }
-
-            return Ok(rss);
+			return Ok(rss);
         }
 
-        [HttpGet("rsd")]
+		[Produces("text/xml")]
+		[HttpGet("feed/rsd")]
         public ActionResult Rsd()
         {
             RsdRoot rsd = null;
 
-            rsd = _subscriptionManager.GetRsd();
+            rsd = subscriptionManager.GetRsd();
 
             return Ok(rsd);
         }
 
-        public IActionResult Atom()
-        {
-            return NoContent();
-        }
+		[Produces("text/xml")]
+		[HttpGet("feed/blogger")]
+		public ActionResult Blogger()
+		{
+			// https://www.poppastring.com/blog/blogger.aspx
+			// Implementation of Blogger XML-RPC Api
+			// blogger
+			// metaWebLog
+			// mt
 
-        public IActionResult Atom(string category)
-        {
-            return NoContent();
-        }
-    }
+			return NoContent();
+		}
+
+		[Produces("text/xml")]
+		[HttpPost("feed/blogger")]
+		public async Task<IActionResult> BloggerPost()
+		{
+			var blogger = string.Empty;
+
+			try
+			{
+				using (var mem = new MemoryStream())
+				{
+					await Request.Body.CopyToAsync(mem);
+					blogger = xmlRpcManager.Invoke(mem);
+				}
+			}
+			catch (Exception ex)
+			{
+				logger.LogError(new EventDataItem(EventCodes.RSS, null, "FeedController.BloggerPost Error: {0}", ex.Message));
+			}
+
+			BreakSiteCache();
+
+			return Content(blogger);
+		}
+
+		[HttpGet("feed/pingback")]
+		public ActionResult PingBack()
+		{
+			return Ok();
+		}
+
+		[HttpGet("feed/rss/comments/{entryid}"), HttpHead("feed/rss/comments/{entryid}")]
+		public ActionResult RssComments(string entryid)
+		{
+			return Ok();
+		}
+
+		[HttpGet("feed/trackback/{entryid}")]
+		public ActionResult TrackBack(string entryid)
+		{
+			return Ok();
+		}
+
+		private void BreakSiteCache()
+		{
+			memoryCache.Remove(CACHEKEY_RSS);
+			memoryCache.Remove(CACHEKEY_FRONTPAGE);
+		}
+	}
 }

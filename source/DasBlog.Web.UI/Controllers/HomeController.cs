@@ -1,38 +1,72 @@
-﻿using System.Diagnostics;
-using System.Linq;
-using AutoMapper;
-using DasBlog.Core;
+﻿using AutoMapper;
+using DasBlog.Core.Common;
 using DasBlog.Managers.Interfaces;
+using DasBlog.Services;
+using DasBlog.Services.ActivityLogs;
 using DasBlog.Web.Models;
 using DasBlog.Web.Models.BlogViewModels;
 using DasBlog.Web.Settings;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Diagnostics;
+using System.Linq;
+
 
 namespace DasBlog.Web.Controllers
 {
 	public class HomeController : DasBlogBaseController
 	{
-		private readonly IBlogManager _blogManager;
-		private readonly IXmlRpcManager _xmlRpcManager;
-		private readonly IDasBlogSettings _dasBlogSettings;
-		private readonly IMapper _mapper;
+		private readonly IBlogManager blogManager;
+		private readonly IDasBlogSettings dasBlogSettings;
+		private readonly IMapper mapper;
+		private readonly ILogger<HomeController> logger;
+		private readonly IMemoryCache memoryCache;
 
-		public HomeController(IBlogManager blogManager, IDasBlogSettings settings, IXmlRpcManager rpcManager, IMapper mapper) : base(settings)
+		public HomeController(IBlogManager blogManager, IDasBlogSettings dasBlogSettings, IMapper mapper, 
+								ILogger<HomeController> logger, IMemoryCache memoryCache) : base(dasBlogSettings)
 		{
-			_blogManager = blogManager;
-			_xmlRpcManager = rpcManager;
-			_dasBlogSettings = settings;
-			_mapper = mapper;
+			this.blogManager = blogManager;
+			this.dasBlogSettings = dasBlogSettings;
+			this.mapper = mapper;
+			this.logger = logger;
+			this.memoryCache = memoryCache;
 		}
 
 		public IActionResult Index()
 		{
-			ListPostsViewModel lpvm = new ListPostsViewModel();
-			lpvm.Posts = _blogManager.GetFrontPagePosts()
-							.Select(entry => _mapper.Map<PostViewModel>(entry)).ToList();
-			DefaultPage();
+			var stopWatch = new Stopwatch();
+			stopWatch.Start();
 
-			return View("Page", lpvm);
+			if (!memoryCache.TryGetValue(CACHEKEY_FRONTPAGE, out ListPostsViewModel lpvm))
+			{
+				lpvm = new ListPostsViewModel
+				{
+					Posts = blogManager.GetFrontPagePosts(Request.Headers["Accept-Language"])
+								.Select(entry => mapper.Map<PostViewModel>(entry))
+								.Select(editentry => editentry).ToList()
+				};
+
+				AddComments(lpvm);
+
+				if (dasBlogSettings.SiteConfiguration.EnableStartPageCaching)
+				{
+					memoryCache.Set(CACHEKEY_FRONTPAGE, lpvm, SiteCacheSettings());
+				}
+
+				logger.LogDebug(new EventDataItem(EventCodes.Site, null, $"Blog home page: {lpvm.Posts.Count} posts shown"));
+			}
+
+			ViewData[Constants.ShowPageControl] = true;			
+			ViewData[Constants.PageNumber] = 0;
+			ViewData[Constants.PostCount] = lpvm.Posts.Count;
+
+			stopWatch.Stop();
+			logger.LogInformation(new EventDataItem(EventCodes.Site, null, $"HomeController.Index Time elapsed: {stopWatch.Elapsed.TotalMilliseconds}ms"));
+
+			return AggregatePostView(lpvm);
 		}
 
 		[HttpGet("page")]
@@ -49,59 +83,70 @@ namespace DasBlog.Web.Controllers
 				return Index();
 			}
 
+
+			var lpvm = new ListPostsViewModel
+			{
+				Posts = blogManager.GetEntriesForPage(index, Request.Headers["Accept-Language"])
+								.Select(entry => mapper.Map<PostViewModel>(entry)).ToList()
+			};
+
+			AddComments(lpvm);
+
 			ViewData["Message"] = string.Format("Page...{0}", index);
+			ViewData[Constants.ShowPageControl] = true;			
+			ViewData[Constants.PageNumber] = index;
+			ViewData[Constants.PostCount] = lpvm.Posts.Count;
 
-			ListPostsViewModel lpvm = new ListPostsViewModel();
-			lpvm.Posts = _blogManager.GetEntriesForPage(index)
-								.Select(entry => _mapper.Map<PostViewModel>(entry)).ToList();
-
-			DefaultPage();
-
-			return View("Page", lpvm);
-		}
-
-		[HttpGet("blogger")]
-		public ActionResult Blogger()
-		{
-			// https://www.poppastring.com/blog/blogger.aspx
-			// Implementation of Blogger XML-RPC Api
-			// blogger
-			// metaWebLog
-			// mt
-
-			return NoContent();
-		}
-
-		[Produces("text/xml")]
-		[HttpPost("blogger")]
-		public IActionResult Blogger([FromBody] string xmlrpcpost)
-		{
-			string blogger = _xmlRpcManager.Invoke(HttpContext.Request.Body);
-
-			return Content(blogger);
+			return AggregatePostView(lpvm);
 		}
 
 		public IActionResult About()
 		{
-			DefaultPage();
-
-			ViewData["Message"] = "Your application description page.";
-
-			return NoContent();
-		}
-
-		public IActionResult Contact()
-		{
-			DefaultPage();
-
-			ViewData["Message"] = "Your contact page.";
-
+			if (dasBlogSettings.SiteConfiguration.EnableAboutView)
+			{
+				DefaultPage("About");
+				return View();
+			}
 			return NoContent();
 		}
 
 		public IActionResult Error()
 		{
-			return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+			try
+			{
+				var feature = HttpContext.Features.Get<IExceptionHandlerPathFeature>();
+				if (feature != null)
+				{
+					var path = feature.Path;
+					var ex = feature.Error;
+				}
+				return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+
+			}
+			catch (Exception ex)
+			{
+				logger.LogError(ex, ex.Message, null);
+				return Content("DasBlog - an error occurred (and reporting gailed) - Click the browser 'Back' button to try using the application");
+			}
+		}
+
+		private ListPostsViewModel AddComments(ListPostsViewModel listPostsViewModel)
+		{
+			foreach (var post in listPostsViewModel.Posts)
+			{
+				var lcvm = new ListCommentsViewModel
+				{
+					Comments = blogManager.GetComments(post.EntryId, false)
+									.Select(comment => mapper.Map<CommentViewModel>(comment)).ToList(),
+					PostId = post.EntryId,
+					PostDate = post.CreatedDateTime,
+					CommentUrl = dasBlogSettings.GetCommentViewUrl(post.PermaLink),
+					AllowComments = post.AllowComments
+				};
+				post.Comments = lcvm;
+			}
+
+			return listPostsViewModel;
 		}
 	}
 }

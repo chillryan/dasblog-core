@@ -1,4 +1,4 @@
-#region Copyright (c) 2003, newtelligence AG. All rights reserved.
+﻿#region Copyright (c) 2003, newtelligence AG. All rights reserved.
 /*
 // Copyright (c) 2003, newtelligence AG. (http://www.newtelligence.com)
 // Original BlogX Source Code: Copyright (c) 2003, Chris Anderson (http://simplegeek.com)
@@ -37,7 +37,8 @@
 */
 #endregion
 
-
+using newtelligence.DasBlog.Runtime.Util;
+using NodaTime;
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -45,9 +46,6 @@ using System.Globalization;
 using System.IO;
 using System.Xml;
 using System.Xml.Serialization;
-using newtelligence.DasBlog.Runtime.Proxies;
-using newtelligence.DasBlog.Util;
-using System.Security.Principal;
 
 namespace newtelligence.DasBlog.Runtime
 {
@@ -282,7 +280,7 @@ namespace newtelligence.DasBlog.Runtime
 			return (dayEntry.DateUtc.Date <= dateTime);
 		}
 
-		public static bool OccursBetween(DayEntry dayEntry, TimeZone timeZone, 
+		public static bool OccursBetween(DayEntry dayEntry, DateTimeZone timeZone, 
 			DateTime startDateTime, DateTime endDateTime)
 		{
 			//return ((timeZone.ToLocalTime(dayEntry.DateUtc) >= startDateTime)
@@ -298,17 +296,17 @@ namespace newtelligence.DasBlog.Runtime
 		/// <param name="timeZone"></param>
 		/// <param name="month"></param>
 		/// <returns></returns>
-		public static bool OccursInMonth(DayEntry dayEntry, TimeZone timeZone, 
-			DateTime month)
+		public static bool OccursInMonth(DayEntry dayEntry, DateTimeZone timeZone, DateTime month)
 		{
 			DateTime startOfMonth = new DateTime(month.Year, month.Month, 1, 0, 0, 0);
 			DateTime endOfMonth = new DateTime(month.Year, month.Month, 1, 0, 0, 0);
 			endOfMonth = endOfMonth.AddMonths(1);
 			endOfMonth = endOfMonth.AddSeconds(-1);
-			
-			TimeSpan offset = timeZone.GetUtcOffset(endOfMonth);
-			endOfMonth = endOfMonth.AddHours(offset.Negate().Hours);
-			return ( OccursBetween(dayEntry, timeZone, startOfMonth, endOfMonth) );
+
+			var localTime = LocalDateTime.FromDateTime(endOfMonth);
+			var offset = timeZone.GetUtcOffset(localTime.InZoneStrictly(timeZone).ToInstant());
+			endOfMonth = endOfMonth.Add(offset.ToTimeSpan());
+			return (OccursBetween(dayEntry, timeZone, startOfMonth, endOfMonth));
 		}
 	}
 }

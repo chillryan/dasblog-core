@@ -1,9 +1,5 @@
-﻿using newtelligence.DasBlog.Runtime;
-using newtelligence.DasBlog.Web.Services.Rsd;
-using newtelligence.DasBlog.Web.Services.Rss20;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using DasBlog.Services.Rss.Rsd;
+using DasBlog.Services.Rss.Rss20;
 
 namespace DasBlog.Managers.Interfaces
 {

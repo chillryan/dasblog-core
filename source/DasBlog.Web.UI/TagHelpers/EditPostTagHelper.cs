@@ -1,23 +1,15 @@
-﻿using Microsoft.AspNetCore.Razor.TagHelpers;
-using System.Threading.Tasks;
+﻿using DasBlog.Services;
+using DasBlog.Web.TagHelpers.Post;
+using System;
 
 namespace DasBlog.Web.TagHelpers
 {
-	public class EditPostTagHelper : TagHelper
+	[Obsolete]
+	public class EditPostTagHelper : PostEditLinkTagHelper
 	{
-		public string BlogPostId { get; set; }
-
-		public override void Process(TagHelperContext context, TagHelperOutput output)
+		public EditPostTagHelper(IDasBlogSettings dasBlogSettings) : base(dasBlogSettings)
 		{
-			output.TagName = "a";
-			output.TagMode = TagMode.StartTagAndEndTag;
-			output.Attributes.SetAttribute("href", $"post/{BlogPostId}/edit");
-			output.Content.SetHtmlContent("Edit this post");
-		}
 
-		public override Task ProcessAsync(TagHelperContext context, TagHelperOutput output)
-		{
-			return Task.Run(() => Process(context, output));
 		}
 	}
 }
