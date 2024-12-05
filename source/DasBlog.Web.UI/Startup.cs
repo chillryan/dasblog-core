@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Coravel;
 using DasBlog.Core.Common;
 using DasBlog.Managers;
 using DasBlog.Managers.Interfaces;
@@ -29,7 +30,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Quartz;
 using System;
 using System.IO;
 using System.Linq;
@@ -54,13 +54,16 @@ namespace DasBlog.Web
 		private readonly string LogFolderPath;
 		private readonly string BinariesPath;
 		private readonly string BinariesUrlRelativePath;
+		private readonly string OEmbedProvidersPath;
 
 		private readonly string DefaultSiteConfigPath;
 		private readonly string DefaultMetaConfigPath;
+		private readonly string DefaultOEmbedProvidersConfigPath;
 		private readonly string DefaultSiteSecurityConfigPath;
 		private readonly string DefaultIISUrlRewriteConfigPath;
 
 		private readonly IWebHostEnvironment hostingEnvironment;
+		
 
 		public IConfiguration Configuration { get; }
 
@@ -77,6 +80,7 @@ namespace DasBlog.Web
 			DefaultSiteConfigPath = Path.Combine("Config", $"site.config");
 			MetaConfigPath = Path.Combine("Config", $"meta.{env.EnvironmentName}.config");
 			DefaultMetaConfigPath = Path.Combine("Config", $"meta.config");
+			OEmbedProvidersPath = DefaultOEmbedProvidersConfigPath = Path.Combine("Config", $"oembed-providers.json");
 
 			ConfigFileInitializationPrep();
 
@@ -88,6 +92,7 @@ namespace DasBlog.Web
 				.AddXmlFile(MetaConfigPath, optional: true, reloadOnChange: true)
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 				.AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
+				.AddJsonFile(DefaultOEmbedProvidersConfigPath, optional: true, reloadOnChange: true)
 				.AddEnvironmentVariables();
 
 			Configuration = builder.Build();
@@ -115,12 +120,14 @@ namespace DasBlog.Web
 			services.Configure<TimeZoneProviderOptions>(Configuration);
 			services.Configure<SiteConfig>(Configuration);
 			services.Configure<MetaTags>(Configuration);
+			services.Configure<OEmbedProviders>(Configuration);
 			services.AddSingleton<AppVersionInfo>();
 
 			services.Configure<ConfigFilePathsDataOption>(options =>
 			{
 				options.SiteConfigFilePath = Path.Combine(hostingEnvironment.ContentRootPath, SiteConfigPath);
 				options.MetaConfigFilePath = Path.Combine(hostingEnvironment.ContentRootPath, MetaConfigPath);
+				options.OEmbedProvidersFilePath = Path.Combine(hostingEnvironment.ContentRootPath, OEmbedProvidersPath);
 				options.SecurityConfigFilePath = Path.Combine(hostingEnvironment.ContentRootPath, SiteSecurityConfigPath);
 				options.IISUrlRewriteFilePath = Path.Combine(hostingEnvironment.ContentRootPath, IISUrlRewriteConfigPath);
 				options.ThemesFolder = ThemeFolderPath;
@@ -178,6 +185,9 @@ namespace DasBlog.Web
 			services
 				.AddHttpContextAccessor();
 
+			services.AddScheduler();
+			services.AddTransient<SiteEmailReport>();
+
 			services
 				.AddTransient<IDasBlogSettings, DasBlogSettings>()
 				.AddTransient<IUserStore<DasBlogUser>, DasBlogUserStore>()
@@ -196,7 +206,9 @@ namespace DasBlog.Web
 				.AddSingleton<ISiteSecurityManager, SiteSecurityManager>()
 				.AddSingleton<IXmlRpcManager, XmlRpcManager>()
 				.AddSingleton<ISiteManager, SiteManager>()
+				.AddSingleton<IActivityPubManager, ActivityPubManager>()
 				.AddSingleton<IHttpContextAccessor, HttpContextAccessor>()
+				.AddSingleton<SiteHttpContext>()
 				.AddSingleton<IFileSystemBinaryManager, FileSystemBinaryManager>()
 				.AddSingleton<IUserDataRepo, UserDataRepo>()
 				.AddSingleton<ISiteSecurityConfig, SiteSecurityConfig>()
@@ -207,8 +219,12 @@ namespace DasBlog.Web
 				.AddSingleton<ITimeZoneProvider, TimeZoneProvider>()
 				.AddSingleton<ISubscriptionManager, SubscriptionManager>()
 				.AddSingleton<IConfigFileService<MetaTags>, MetaConfigFileService>()
+				.AddSingleton<IConfigFileService<OEmbedProviders>, OEmbedProvidersFileService>()
 				.AddSingleton<IConfigFileService<SiteConfig>, SiteConfigFileService>()
 				.AddSingleton<IConfigFileService<SiteSecurityConfigData>, SiteSecurityConfigFileService>();
+
+			services.AddSingleton<IExternalEmbeddingHandler, ExternalEmbeddingHandler>();
+
 
 			services
 				.AddAutoMapper((serviceProvider, mapperConfig) =>
@@ -216,6 +232,8 @@ namespace DasBlog.Web
 					mapperConfig.AddProfile(new ProfilePost(serviceProvider.GetService<IDasBlogSettings>()));
 					mapperConfig.AddProfile(new ProfileDasBlogUser(serviceProvider.GetService<ISiteSecurityManager>()));
 					mapperConfig.AddProfile(new ProfileSettings());
+					mapperConfig.AddProfile(new ProfileActivityPub());
+					mapperConfig.AddProfile(new ProfileStaticPage());
 				})
 				.AddMvc()
 				.AddXmlSerializerFormatters();
@@ -236,46 +254,6 @@ namespace DasBlog.Web
 
 				options.CheckConsentNeeded = context => flag;
 				options.MinimumSameSitePolicy = SameSiteMode.None;
-			});
-
-			services.AddQuartz(q =>
-			{
-				q.SchedulerId = "Scheduler-Core";
-
-				q.UseMicrosoftDependencyInjectionJobFactory(options =>
-				{
-					// if we don't have the job in DI, allow fallback to configure via default constructor
-					options.AllowDefaultConstructor = true;
-				});
-
-				q.UseSimpleTypeLoader();
-				q.UseInMemoryStore();
-				q.UseDefaultThreadPool(tp =>
-				{
-					tp.MaxConcurrency = 10;
-				});
-
-				var jobKey = new JobKey("key1", "main-group");
-
-				q.AddJob<SiteEmailReport>(j => j
-					.StoreDurably()
-					.WithIdentity(jobKey)
-					.WithDescription("Site report job")
-				);
-
-				q.AddTrigger(t => t
-					.WithIdentity("Simple Trigger")
-					.ForJob(jobKey)
-					.StartNow()
-					.WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(23, 45))
-					.WithDescription("my awesome simple trigger")
-
-				);
-			});
-
-			services.AddQuartzServer(options =>
-			{
-				options.WaitForJobsToComplete = true;
 			});
 		}
 
@@ -299,6 +277,14 @@ namespace DasBlog.Web
 				app.UseHsts(options => options.MaxAge(days: 30));
 			}
 
+			app.ApplicationServices.UseScheduler(scheduler =>
+			{
+				scheduler
+					.Schedule<SiteEmailReport>()
+					.DailyAt(23, 19)
+					.Zoned(TimeZoneInfo.Local);
+			});
+
 			if (!siteOk)
 			{
 				app.Run(async context => await context.Response.WriteAsync(siteError));
@@ -312,8 +298,12 @@ namespace DasBlog.Web
 			app.UseRouting();
 
 			//if you've configured it at /blog or /whatever, set that pathbase so ~ will generate correctly
-			var rootUri = new Uri(dasBlogSettings.SiteConfiguration.Root);
-			var path = rootUri.AbsolutePath;
+			var path = "/";
+			if (!string.IsNullOrWhiteSpace(dasBlogSettings.SiteConfiguration.Root))
+			{
+				var rootUri = new Uri(dasBlogSettings.SiteConfiguration.Root);
+				path = rootUri.AbsolutePath;
+			}
 
 			//Deal with path base and proxies that change the request path
 			if (path != "/")
@@ -447,6 +437,8 @@ namespace DasBlog.Web
 				endpoints.MapControllerRoute(
 					name: "default", "~/{controller=Home}/{action=Index}/{id?}");
 			});
+
+			app.UseHttpContext();
 		}
 
 		/// <summary>

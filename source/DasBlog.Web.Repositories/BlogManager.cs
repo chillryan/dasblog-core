@@ -59,6 +59,11 @@ namespace DasBlog.Managers
 			}
 		}
 
+		public StaticPage GetStaticPage(string posttitle)
+		{
+			return dataService.GetStaticPage(posttitle);
+		}
+
 		public Entry GetBlogPostByGuid(Guid postid)
 		{
 			return dataService.GetEntry(postid.ToString());
@@ -203,6 +208,11 @@ namespace DasBlog.Managers
 			dataService.DeleteEntry(postid, null);
 
 			LogEvent(EventCodes.EntryDeleted, entry);
+		}
+
+		public EntryCollection GetAllEntries()
+		{
+			return dataService.GetEntries(false);
 		}
 
 		private static StringCollection GetSearchWords(string searchString)
@@ -466,10 +476,10 @@ namespace DasBlog.Managers
 		{
 			if (string.IsNullOrWhiteSpace(dasBlogSettings.SiteConfiguration.SmtpFromEmail))
 			{
-				return dasBlogSettings.SiteConfiguration.SmtpUserName;
+				return dasBlogSettings.SiteConfiguration.SmtpUserName?.Trim();
 			}
 
-			return dasBlogSettings.SiteConfiguration.SmtpFromEmail.Trim();
+			return dasBlogSettings.SiteConfiguration.SmtpFromEmail?.Trim();
 		}
 		public bool SendTestEmail()
 		{

@@ -61,9 +61,12 @@ namespace DasBlog.Services.ConfigFile.Interfaces
 
         string Root { get; set; }
 
-        string Copyright { get; set; }
+        string CdnFrom { get; set; }
+        string CdnTo { get; set; }
 
-        int RssDayCount { get; set; }
+		string Copyright { get; set; }
+		
+		int RssDayCount { get; set; }
 
         int RssMainEntryCount { get; set; }
 
@@ -100,9 +103,13 @@ namespace DasBlog.Services.ConfigFile.Interfaces
         bool SendPostsByEmail { get; set; }
         bool EnableAboutView { get; set; }
 
+        string TinyMCEApiKey { get; set; }
+        
         bool EnableBloggerApi { get; set; }
 
         bool EnableComments { get; set; }
+
+        bool AllowMarkdownInComments {get; set;}
 
         bool EnableCommentApi { get; set; }
 
@@ -351,10 +358,19 @@ namespace DasBlog.Services.ConfigFile.Interfaces
 
 		bool CookieConsentEnabled { get; set; }
 
+		string MastodonServerUrl { get; set; }
+
+		string MastodonAccount { get; set; }
+
 		[XmlAnyElement]
         XmlElement[] anyElements { get; set; }
 
         [XmlAnyAttribute]
         XmlAttribute[] anyAttributes { get; set; }
-    }
+		bool EnableRewritingHashtagsToCategoryLinks { get; set; }
+		bool EnableRewritingBareLinksToEmbeddings { get; set; }
+		bool EnableRewritingBareLinksToIcons { get; set; }
+
+		string PostPinnedToHomePage { get; set; }
+	}
 }

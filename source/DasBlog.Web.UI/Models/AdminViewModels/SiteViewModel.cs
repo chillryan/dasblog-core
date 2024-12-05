@@ -51,7 +51,7 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[DisplayName("Front page day count")]
 		[Description("The maximum number of days to appear on your home page")]
 		[Required(AllowEmptyStrings = false, ErrorMessage = "Please enter a Front Page Day Count")]
-		[Range(1, 1000, ErrorMessage = "Enter a value between  1 and 1000")]
+		[Range(1, 10000, ErrorMessage = "Enter a value between  1 and 10000")]
 		public int FrontPageDayCount { get; set; }
 
 		[DisplayName("Front page entry count")]
@@ -122,6 +122,10 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[DisplayName("Enable comments")]
 		[Description("Allow comments on your blog posts")]
 		public bool EnableComments { get; set; }
+
+        [DisplayName("Allow Markdown in comments")]
+        [Description("Allow the use of Markdown In Comments")]
+        public bool AllowMarkdownInComments { get; set; }
 
 		[DisplayName("Enable comment days limitation")]
 		[Description("Once enabled comments are allowed as defined by 'Days Comments Allowed'")]
@@ -204,6 +208,12 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[Description("")]
 		[StringLength(300, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 300 characters")]
 		public string EntryEditControl { get; set; }
+		
+		[DisplayName("TinyMCE API Key")]
+		[Description("")]
+		[StringLength(300, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 300 characters")]
+		[Required(AllowEmptyStrings = false, ErrorMessage = "Enter a value for TinyMCE API Key or enter 'no-api-key'")]
+		public string TinyMCEApiKey { get; set; }		
 
 		[DisplayName("Content directory")]
 		[Description("")]
@@ -230,8 +240,15 @@ namespace DasBlog.Web.Models.AdminViewModels
 
 		[DisplayName("Time zone index")]
 		[Description("")]
-
 		public int DisplayTimeZoneIndex { get; set; }
+
+		[DisplayName("CDN from")]
+		[Description("The part of your Root URL to replace with the CDN URL. (optional)")]
+		public string CdnFrom { get; set; }
+
+		[DisplayName("CDN to")]
+		[Description("The CDN URL that will replace 'CDN from'. (optional)")]
+		public string CdnTo { get; set; }
 
 		[DisplayName("Comments require approval")]
 		[Description("")]
@@ -285,10 +302,25 @@ namespace DasBlog.Web.Models.AdminViewModels
 		[Description("Help meet some of the EU General Data Protection Regulation (GDPR) requirements")]
 		public bool CookieConsentEnabled { get; set; }
 
-		[DisplayName("Default Sources (seperated by semi colon")]
+		[DisplayName("Default Sources (separated by semi colon")]
 		[Description("")]
 		[StringLength(50, MinimumLength = 1, ErrorMessage = "{0} should be between 1 to 50 characters")]
 		public string DefaultSources { get; set; }
+
+		[DisplayName("Mastodon Server")]
+		[Description("")]
+		[DataType(DataType.Url, ErrorMessage = "Invalid URL format")]
+		public string MastodonServerUrl { get; set; }
+
+		[DisplayName("Mastodon Account (@username)")]
+		[Description("")]
+		[RegularExpression("(@)((?:[A-Za-z0-9-_]*))")]
+		public string MastodonAccount { get; set; }
+
+		[DisplayName("Pin this Post to the Home Page")]
+		[Description("")]
+		[DataType(DataType.Text, ErrorMessage = "Invalid Guid format")]
+		public string PostPinnedToHomePage { get; set; }
 
 		public bool EntryTitleAsLink { get; set; }
 		public bool ObfuscateEmail { get; set; }

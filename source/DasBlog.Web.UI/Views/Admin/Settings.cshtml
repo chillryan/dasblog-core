@@ -157,6 +157,21 @@
 
     </div>
 
+    <div class="form-group row mb-3">
+
+        @Html.LabelFor(m => @Model.SiteConfig.PostPinnedToHomePage, null, new { @class = "col-form-label col-sm-2" })
+        
+        <div class="col-sm-3">
+            @Html.DropDownListFor(n => n.SiteConfig.PostPinnedToHomePage,
+            new SelectList(new BlogPostListViewModel().Init(Model.Posts), "Id", "Name"),
+            new { @class = "form-select col-1" })
+        </div>
+
+
+        @Html.ValidationMessageFor(m => m.SiteConfig.PostPinnedToHomePage, null, new { @class = "text-danger" })
+
+    </div>
+
     <div class="form-check row mb-3">
         <div class="col-sm-10 offset-sm-2">
             <div class="col-sm-2">
@@ -244,6 +259,15 @@
                 @Html.CheckBoxFor(m => @Model.SiteConfig.EnableComments, new { @class = "form-check-input form-check-input" })
             </div>
             @Html.LabelFor(m => @Model.SiteConfig.EnableComments, null, new { @class = "col-check-label col-sm-2" })
+        </div>
+    </div>
+
+    <div class="form-check row mb-3">
+        <div class="col-sm-10 offset-sm-2">
+            <div class="col-sm-10">
+                @Html.CheckBoxFor(m => @Model.SiteConfig.AllowMarkdownInComments, new { @class = "form-check-input form-check-input" })
+            </div>
+            @Html.LabelFor(m => @Model.SiteConfig.AllowMarkdownInComments, null, new { @class = "col-check-label col-sm-2" })
         </div>
     </div>
 
@@ -387,6 +411,22 @@
     <h3>Social</h3>
 
     <div class="form-group row mb-3">
+        @Html.LabelFor(m => @Model.SiteConfig.MastodonServerUrl, null, new { @class = "col-form-label col-sm-2" })
+        <div class="col-sm-5">
+            @Html.TextBoxFor(m => @Model.SiteConfig.MastodonServerUrl, null, new { @class = "form-control sm-10" })
+        </div>
+        @Html.ValidationMessageFor(m => m.SiteConfig.MastodonServerUrl, null, new { @class = "text-danger" })
+    </div>
+
+    <div class="form-group row mb-3">
+        @Html.LabelFor(m => @Model.SiteConfig.MastodonAccount, null, new { @class = "col-form-label col-sm-2" })
+        <div class="col-sm-5">
+            @Html.TextBoxFor(m => @Model.SiteConfig.MastodonAccount, null, new { @class = "form-control sm-10" })
+        </div>
+        @Html.ValidationMessageFor(m => m.SiteConfig.MastodonAccount, null, new { @class = "text-danger" })
+    </div>
+
+    <div class="form-group row mb-3">
 
         @Html.LabelFor(m => @Model.MetaConfig.TwitterSite, null, new { @class = "col-form-label col-sm-2" })
         <div class="col-sm-5">
@@ -435,6 +475,8 @@
         @Html.ValidationMessageFor(m => m.MetaConfig.GoogleAnalyticsID, null, new { @class = "text-danger" })
     </div>
 
+
+
     <h3>Blogging & Editing</h3>
 
     <div class="form-check row mb-3">
@@ -466,6 +508,16 @@
         </div>
         @Html.ValidationMessageFor(m => m.SiteConfig.EntryEditControl, null, new { @class = "text-danger" })
 
+    </div>
+
+    <div class="form-group row mb-3">
+        @Html.LabelFor(m => @Model.SiteConfig.TinyMCEApiKey, null, new { @class = "col-form-label col-sm-2" })
+
+        <div class="col-sm-5">
+            @Html.TextBoxFor(m => @Model.SiteConfig.TinyMCEApiKey, null, new { @class = "form-control sm-10" })
+        </div>
+
+        @Html.ValidationMessageFor(m => m.SiteConfig.TinyMCEApiKey, null, new { @class = "text-danger" })
     </div>
 
     <h3>Email Settings & Notifications</h3>
@@ -657,6 +709,22 @@
         @Html.ValidationMessageFor(m => m.SiteConfig.DisplayTimeZoneIndex, null, new { @class = "text-danger" })
 
     </div>
+    
+    <div class="form-group row mb-3">
+
+        @Html.LabelFor(m => @Model.SiteConfig.CdnFrom, null, new { @class = "col-form-label col-sm-2" })
+        <div class="col-sm-5">
+                @Html.TextBoxFor(m => @Model.SiteConfig.CdnFrom, null, new { @class = "form-control sm-10" })
+        </div>
+        @Html.ValidationMessageFor(m => m.SiteConfig.CdnFrom, null, new { @class = "text-danger" })
+
+        @Html.LabelFor(m => @Model.SiteConfig.CdnTo, null, new { @class = "col-form-label col-sm-2" })
+        <div class="col-sm-5">
+            @Html.TextBoxFor(m => @Model.SiteConfig.CdnTo, null, new { @class = "form-control sm-10" })
+        </div>
+        @Html.ValidationMessageFor(m => m.SiteConfig.CdnTo, null, new { @class = "text-danger" })
+    
+    </div>
 
     <h3>Security</h3>
 
@@ -693,8 +761,8 @@
     <hr />
 
     <div class="form-group">
-        <input type="submit" name="submitAction" value="Save" class="btn btn-default btn-primary" />
-        <input asp-controller="Home" asp-action="Index" type="submit" name="submit" value="Cancel" class="btn cancel" />
+        <input type="submit" name="submitAction" value="Save" class="btn btn-default btn-primary btn-lg" />
+        <input asp-controller="Home" asp-action="Index" type="submit" name="submit" value="Cancel" class="btn btn-default btn-secondary btn-lg" />
     </div>
 
     @section Scripts {
